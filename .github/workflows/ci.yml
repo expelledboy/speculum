@@ -100,13 +100,7 @@ jobs:
       - run: just kind-up
       - run: bun scripts/k8s-load-images.ts
 
-      # The ADAPTER suites, not the petstore example. The example opens one
-      # `kubectl port-forward` per component across six components, and the
-      # adapter cannot yet detect a forward that dies after establishing — on
-      # kind that produced 2 clean runs in 5, and identically on k3d, while a
-      # shared-image-store cluster shows none of it. These suites drive one
-      # component at a time and ran 5 of 5 clean. The example keeps its
-      # Kubernetes coverage in `just pre-release`, against such a cluster.
+      # The ADAPTER suites, not the petstore example: D-049 in docs/decisions.md.
       - name: Kubernetes adapter suites
         env:
           CYANOTYPE_REQUIRE_K8S: "1"

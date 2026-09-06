@@ -21,12 +21,10 @@
  * Kubernetes example paths, for the reason below.
  *
  * POINT CYANOTYPE_K8S_CONTEXT AT A SHARED-IMAGE-STORE CLUSTER (OrbStack,
- * Docker Desktop) BEFORE RUNNING THIS. The petstore example drives six
- * components at once, and the Kubernetes adapter opens one `kubectl
- * port-forward` per component with no recovery for one that dies after
- * establishing. On kind that produced 2 clean runs in 5, and identically on
- * k3d. The default context is a kind cluster, so running this gate unset will
- * fail intermittently for a reason that has nothing to do with the release.
+ * Docker Desktop) BEFORE RUNNING THIS. The petstore example's Kubernetes paths
+ * are not reliable on the default kind cluster — D-049 in docs/decisions.md —
+ * so this gate would otherwise fail intermittently for a reason that has
+ * nothing to do with the release.
  *
  * What it deliberately does NOT do: tag, push, or publish. It answers "may
  * this be released", not "release it".
