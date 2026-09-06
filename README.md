@@ -250,13 +250,18 @@ The Adapter is Cyanotype's substrate seam (D-003). The same test suite runs agai
 
 The `tests/petstore-example/` SLA suite (16 tests including chaos failover and p95 latency assertions) passes against **all five** substrates. Switch via `CYANOTYPE_ADAPTER=docker|docker-attach|memory|k8s|k8s-attach`.
 
-| Adapter | Suite time |
-|---|---|
-| in-memory | 0.75s |
-| docker | 10.3s |
-| docker-attach (Compose) | 10.8s |
-| k8s deploy (OrbStack) | 16.4s |
-| k8s attach (OrbStack) | 15.2s |
+| Adapter | Suite time | Measured on |
+|---|---|---|
+| in-memory | 0.75s | any machine — no daemon |
+| docker | 10.3s | macOS, OrbStack's Docker daemon |
+| docker-attach (Compose) | 10.8s | macOS, OrbStack's Docker daemon |
+| k8s deploy | 16.4s | OrbStack's Kubernetes |
+| k8s attach | 15.2s | OrbStack's Kubernetes |
+
+The two Kubernetes rows are measured on a cluster sharing the host's image
+store rather than on kind, and that is not incidental: those two paths are not
+reliable on kind ([D-049](./docs/decisions.md#d-049-ci-runs-the-kubernetes-adapter-suites-not-the-example--one-port-forward-per-component-is-not-yet-survivable)). Times are single observations on one
+machine, useful for orders of magnitude and not for comparison between rows.
 
 ## FAQ
 
@@ -328,6 +333,8 @@ just test-petstore-docker-attach
 
 # Attach mode against a pre-deployed cluster — deploys fixtures, derives
 # override config from the YAML, runs the suite, tears down on exit.
+# Point CYANOTYPE_K8S_CONTEXT at OrbStack or Docker Desktop: this path and
+# `just test-petstore-k8s` are not reliable on kind (D-049).
 # See docs/attach-mode.md for the developer-derive-script flow.
 just test-petstore-k8s-attach
 
@@ -346,6 +353,8 @@ just typecheck
 ```
 
 If a `bun test` run is interrupted (Ctrl-C during the integration suite), orphan containers can keep ports allocated. `just clean-containers` force-removes everything labeled `cyanotype.substrate=docker`, and `just check-no-leaks` reports whether any survived.
+
+The commands above are a sample. [`CONTRIBUTING.md`](./CONTRIBUTING.md#run-the-tests) is the authority on which suites need which substrate, what continuous integration checks, and what only the release gate checks — read that before relying on this list.
 
 ## Contributing
 
