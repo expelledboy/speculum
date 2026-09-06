@@ -70,7 +70,8 @@ just typecheck
 just test-unit          # tests/core/ — the harness's own tests, all pure
 ```
 
-**Adapter integration — needs a Docker daemon, and a cluster for two files.**
+**Adapter integration — needs a Docker daemon; two of its six files also need
+a Kubernetes cluster.**
 
 ```sh
 just test-substrate     # tests/substrate/ — each adapter driven directly
@@ -119,7 +120,8 @@ mid-suite. Neither is needed on the normal path; the preload handles cleanup.
 | package contents | yes | yes |
 | example on memory, Docker, Compose-attach | yes | yes |
 | example on Kubernetes | **no** — [D-049](./docs/decisions.md#d-049-ci-runs-the-kubernetes-adapter-suites-not-the-example--one-port-forward-per-component-is-not-yet-survivable) | yes |
-| built command-line interface, leak gate | no | yes |
+| leak gate | yes | yes |
+| built command-line interface | no | yes |
 | git state, tag, CHANGELOG, lockfile | no | yes |
 
 The release gate is a strict superset. Green CI is necessary and not
