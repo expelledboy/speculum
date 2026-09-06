@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-06
+
 ### Fixed
 
 - The Docker adapter now creates containers with
@@ -16,6 +18,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reference example — failed readiness on Linux with a 30-second
   `probe_timeout` naming a container that was running correctly and could not
   resolve its neighbours. Requires Docker Engine 20.10+ ([D-048](docs/decisions.md#d-048-the-docker-adapter-asks-for-hostdockerinternal-it-no-longer-assumes-the-runtime-defines-it)).
+
+### Development
+
+- **Continuous integration now runs every substrate, and fails when one is
+  missing.** It previously ran `tests/core/` and `tests/substrate/` in a single
+  job on a runner with Docker and no cluster, so the two Kubernetes suites
+  contributed 22 tests that executed no assertions and reported as passes,
+  while the petstore example — the suite proving all five adapters behave
+  alike — ran nowhere at all. Three parallel jobs now cover unit, Docker and
+  Kubernetes in about two minutes.
+
+- **A suite that cannot reach its substrate reports `skip`, not `pass`.** The
+  availability probe moved out of `beforeAll`, which Bun runs after test
+  registration and therefore too late to inform `describe.skipIf`. Gating is
+  per describe-block, because two files mix pure and substrate-dependent
+  blocks. `CYANOTYPE_REQUIRE_DOCKER=1` and `CYANOTYPE_REQUIRE_K8S=1` turn an
+  absent substrate into a failure instead; continuous integration sets both,
+  since it provisions them first and their absence would mean the provisioning
+  step silently did nothing.
+
+- **kind is the standard local cluster**, created by `just kind-up` and
+  defaulted to by every Kubernetes recipe. `load-k8s-images` used to print that
+  images needed no copying and copy nothing — true for OrbStack and Docker
+  Desktop, which share their image store, and false for kind, where it produced
+  a sixty-second Pod-scheduling timeout that never mentioned images.
+  `scripts/k8s-load-images.ts` detects which loader a cluster needs and refuses
+  by name when it cannot tell.
+
+- **The petstore example's two Kubernetes paths are not run by continuous
+  integration** and are not reliable on kind. The adapter opens one `kubectl
+  port-forward` per component and cannot yet recover one that dies after
+  establishing. Point `CYANOTYPE_K8S_CONTEXT` at OrbStack or Docker Desktop for
+  those, and for `just pre-release`, which runs them
+  ([D-049](docs/decisions.md#d-049-ci-runs-the-kubernetes-adapter-suites-not-the-example--one-port-forward-per-component-is-not-yet-survivable)).
+
+- **`just pre-release` is now a strict superset of continuous integration.** It
+  previously omitted `tests/substrate/` and the package-contents check
+  entirely, making it disjoint from CI rather than stricter — passing both was
+  the only real coverage anyone had, and nothing said so.
+
+- **The six upstream images are mirrored monthly to GitHub Container Registry**
+  and retagged to their original names before any suite runs, so no Dockerfile,
+  manifest or fixture knows the mirror exists. Anonymous Docker Hub pulls are
+  capped per IP address and GitHub's runners share addresses with every other
+  tenant, so the fix is to remove the dependency rather than shrink it. The
+  mirror is linux/amd64 only and priming refuses to run elsewhere.
 
 ## [0.6.0] - 2026-08-31
 
