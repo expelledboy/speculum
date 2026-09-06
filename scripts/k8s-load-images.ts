@@ -24,6 +24,14 @@
  * context names. Anything else refuses rather than guessing, because guessing
  * wrong here is the sixty-second mystery above.
  *
+ * K3D AND MINIKUBE ARE ABSENT ON PURPOSE, and k3d is not a hypothetical: it
+ * was built, loaded and run against this suite on two platforms while choosing
+ * a cluster for continuous integration, and it measured the same as kind
+ * (D-049). Supporting it here would mean shipping a branch nobody exercises,
+ * whose first failure would be in front of a stranger. The refusal below tells
+ * such a user exactly which override to set, which is a better trade than a
+ * guess we cannot back.
+ *
  * Refusal follows the repository's gate contract: silent and exit 0 when the
  * cluster can see the images, otherwise the whole story between two `[GATE]`
  * lines and a non-zero exit.

@@ -7,13 +7,20 @@
  * you can only run once — wrong for something every k8s recipe wants to
  * depend on.
  *
- * IT WAITS TWICE, AND THE SECOND WAIT IS THE LOAD-BEARING ONE. `kind create
- * --wait` waits for the NODE to report Ready, and CoreDNS is still
- * ContainerCreating when that returns — measured, not assumed. Deploy mode
- * wires cross-component traffic through Service DNS (D-020), so a suite
- * starting inside that window watches its components fail readiness and
- * reports a timeout naming the component rather than the DNS it could not
- * resolve.
+ * IT WAITS TWICE, AND WHAT THE SECOND WAIT BUYS IS THE POINT. `kind create
+ * --wait` waits for the NODE to report Ready; every pod in `kube-system` is
+ * still starting when it returns — measured, not assumed. The second wait
+ * makes one guarantee: when this script exits 0, cluster DNS is serving.
+ *
+ * That guarantee is what a caller needs, because deploy mode wires
+ * cross-component traffic through Service DNS (D-020), so a suite that starts
+ * before DNS is up cannot resolve anything and reports timeouts naming the
+ * components rather than the resolution that failed.
+ *
+ * It is worth being exact about the scope of that, because this wait was found
+ * while chasing something else and does not fix it: the petstore example is
+ * unreliable on kind for an unrelated reason (D-049). This wait removes one
+ * deterministic startup race. It does not make that example reliable.
  */
 
 const CONTEXT = process.env.CYANOTYPE_K8S_CONTEXT ?? "kind-cyanotype";
