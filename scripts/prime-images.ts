@@ -30,19 +30,13 @@ import { readFileSync } from "node:fs";
 type Image = { source: string; mirror: string; id: string; usedBy: string };
 
 /**
- * LINUX/AMD64 ONLY, and this refusal is the whole reason the check exists.
- *
- * The mirror workflow runs on a linux/amd64 runner and pushes the
- * single-platform image it pulled there — these are not multi-architecture
- * manifests. Pulling one on arm64 succeeds and yields an amd64 image, so
- * retagging it as `alpine:3.20` would silently replace a working local image
- * with one that cannot run natively. Nothing would report an error until a
- * container failed for reasons that have nothing to do with the test.
- *
- * Refusing costs a developer nothing: the source registry works locally, which
- * is what they were already using. Making the mirror multi-architecture would
- * need `docker buildx imagetools create` and is not worth it for a measure that
- * exists to fix CI flake.
+ * The mirror holds linux/amd64 images only — see `tests/support/images.json`,
+ * which states that constraint and why it is accepted. This is where it is
+ * enforced: retagging an amd64 image as `alpine:3.20` on an arm64 machine
+ * would replace a working local image with one that cannot run natively, and
+ * nothing would report an error until a container failed for a reason that
+ * looks unrelated. Refusing costs a developer nothing, since the source
+ * registry is what they were already using.
  */
 const PLATFORM_OK = process.platform === "linux" && process.arch === "x64";
 type Manifest = { registry: string; images: Image[] };
