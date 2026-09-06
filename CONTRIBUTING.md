@@ -60,30 +60,72 @@ Switch to a semver pin once your library change has landed in a published releas
 
 ## Run the tests
 
+Four layers, cheapest first. `just --list` is the full manifest; this is the
+shape behind it.
+
+**The inner loop — no daemon, no cluster.** Seconds. Run it constantly.
+
 ```sh
-# Type-check.
 just typecheck
-
-# Pure unit suite — no Docker, no cluster. Seconds, not minutes; run it constantly.
-just test-unit
-
-# Adapter integration against real Docker and Kubernetes.
-just test-substrate
-
-# Both harness suites.
-just test-core
-
-# Full suite. Teardown runs automatically; back-to-back `bun test` invocations
-# don't leak containers.
-just test
-
-# Build the test-image dependencies (one time).
-just build-test-images
-
-# Manual reset — for unusual situations (kill -9, partial state).
-# Not needed on the normal path; the preload handles cleanup.
-just clean-containers
+just test-unit          # tests/core/ — the harness's own tests, all pure
 ```
+
+**Adapter integration — needs a Docker daemon; two of its six files also need
+a Kubernetes cluster.**
+
+```sh
+just test-substrate     # tests/substrate/ — each adapter driven directly
+```
+
+A substrate you do not have makes its suites report `skip`, not `pass`. That
+distinction is load-bearing: these suites once reported 22 passing tests while
+executing no assertions at all, because each body opened with an early return.
+Set `CYANOTYPE_REQUIRE_DOCKER=1` or `CYANOTYPE_REQUIRE_K8S=1` to turn an absent
+substrate into a failure instead — which is what continuous integration does,
+because it provisions them first and their absence would mean the provisioning
+step silently did nothing.
+
+**The example, across substrates.** `tests/petstore-example/` is the same 16
+tests run against every adapter; it is what backs the claim that a suite does
+not change when its substrate does.
+
+```sh
+just test-petstore-memory          # in-process fakes, no daemon
+just test-petstore-docker          # real containers
+just test-petstore-docker-attach   # a Compose stack this brings up and tears down
+just test-petstore-k8s             # needs a shared-image-store cluster
+just test-petstore-k8s-attach      # needs a shared-image-store cluster
+```
+
+The last two are not reliable on kind ([D-049](./docs/decisions.md#d-049-ci-runs-the-kubernetes-adapter-suites-not-the-example--one-port-forward-per-component-is-not-yet-survivable)). Point
+`CYANOTYPE_K8S_CONTEXT` at OrbStack or Docker Desktop for those.
+
+**Everything, plus what only a release cares about.**
+
+```sh
+just test               # the whole tree in one process
+just pre-release        # the release gate — see below
+```
+
+Supporting commands: `just build-test-images` builds the two images the example
+needs, and `just clean-containers` force-removes orphans after a run killed
+mid-suite. Neither is needed on the normal path; the preload handles cleanup.
+
+### What checks what
+
+| | CI, on every pull request | `just pre-release` |
+|---|---|---|
+| lint, typecheck, build, `tests/core/` | yes | yes |
+| `tests/substrate/` | yes | yes |
+| package contents | yes | yes |
+| example on memory, Docker, Compose-attach | yes | yes |
+| example on Kubernetes | **no** — [D-049](./docs/decisions.md#d-049-ci-runs-the-kubernetes-adapter-suites-not-the-example--one-port-forward-per-component-is-not-yet-survivable) | yes |
+| leak gate | yes | yes |
+| built command-line interface | no | yes |
+| git state, tag, CHANGELOG, lockfile | no | yes |
+
+The release gate is a strict superset. Green CI is necessary and not
+sufficient, and the gap between the columns is exactly the release-shaped risk.
 
 ### How teardown works
 
@@ -188,24 +230,18 @@ just pre-release
 ```
 
 It is a gate, not a list: silent and exit 0 when the tree is releasable,
-otherwise every failing check between two `[GATE]` lines. It covers git state,
-the CHANGELOG section the release workflow will look for, the lockfile, lint,
-typecheck, build, the core tests, the adapter suites, the package contents, the
-petstore example against all five substrates, and container leaks — and it tags
-nothing.
-
-It is a **strict superset of CI**, deliberately. Everything the pull-request
-workflow runs, this runs too, plus what only a release cares about: git state,
-tag availability, the built command-line interface, and the two Kubernetes
-petstore paths the workflow cannot run at all. So a green CI is necessary and
-not sufficient, and the difference between them is exactly the release-shaped
-risk.
+otherwise every failing check between two `[GATE]` lines, and it tags nothing.
+What it covers versus what CI covers is the table under
+["What checks what"](#what-checks-what) — it is a strict superset, and it adds
+the git and tag state, the CHANGELOG section the release workflow will extract,
+the lockfile, the built command-line interface, and the two Kubernetes example
+paths CI does not run.
 
 It runs every suite with `CYANOTYPE_REQUIRE_DOCKER` and `CYANOTYPE_REQUIRE_K8S`
-set, which turn an absent substrate into a failure rather than a skip. A release
-bar that quietly drops the suites it could not run is not a bar. Point
-`CYANOTYPE_K8S_CONTEXT` at a shared-image-store cluster before running it — see
-"Which Kubernetes cluster" above.
+set, so a substrate it could not reach fails the gate rather than vanishing
+from it. A release bar that quietly drops the suites it could not run is not a
+bar. Point `CYANOTYPE_K8S_CONTEXT` at a shared-image-store cluster before
+running it — see ["Which Kubernetes cluster"](#which-kubernetes-cluster).
 
 It also smokes the built CLI, which is the one check with a story behind it:
 `tests/core/cli-derive.test.ts` covers `deriveCompose` and `deriveK8s` as pure
