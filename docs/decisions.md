@@ -52,6 +52,7 @@
 - [D-046 — `Adapter.reconnect`: one optional SPI method, for adapters whose reported ports are process-local](#d-046-adapterreconnect--one-optional-spi-method-for-adapters-whose-reported-ports-are-process-local)
 - [D-047 — Attach resolves a COMPONENT, not a container id: `reconnect` reconciles by label](#d-047-attach-resolves-a-component-not-a-container-id--reconnect-reconciles-by-label)
 - [D-048 — The Docker adapter asks for `host.docker.internal`; it no longer assumes the runtime defines it](#d-048-the-docker-adapter-asks-for-hostdockerinternal-it-no-longer-assumes-the-runtime-defines-it)
+- [D-049 — CI runs the Kubernetes ADAPTER suites, not the example: one port-forward per component is not yet survivable](#d-049-ci-runs-the-kubernetes-adapter-suites-not-the-example--one-port-forward-per-component-is-not-yet-survivable)
 
 ---
 
@@ -1028,3 +1029,45 @@ The Compose attach fixture carries the same alias per service, because Compose d
 - On Docker Desktop and OrbStack the setting is redundant and harmless — it names the value those runtimes already supply.
 - Guarded by `tests/core/docker-host-alias.test.ts`, which asserts on what the adapter ASKS FOR rather than on connectivity. A substrate test cannot catch a regression here on a machine whose runtime supplies the name anyway, which is precisely how this survived so long.
 - It does not follow that every cross-container idiom now works everywhere. This fixes name resolution; it does not give containers a shared network, and Bindings that assume one still need Kubernetes deploy mode's Service DNS (D-020).
+
+---
+
+## D-049. CI runs the Kubernetes ADAPTER suites, not the example — one port-forward per component is not yet survivable
+
+**Context:** Continuous integration was extended to run every substrate on every pull request. Four of the five went in unchanged. The fifth — the petstore example against Kubernetes deploy and attach modes — does not pass reliably on any cluster we can create in CI, and the reason is ours.
+
+The deploy-mode adapter gives the test process a local endpoint to each Pod by spawning one `kubectl port-forward` per component (D-017, D-019). The example has six components. The adapter waits for `Forwarding from …` before returning, raising `k8s_port_forward_timeout` if no local listener appears in time and `k8s_port_forward_exited` if the subprocess exits first, so *establishment* is handled. What is not handled is a forward that establishes and then stops carrying traffic. Nothing notices, and nothing re-opens it.
+
+Measured, with sample sizes stated because a single green run of this suite means very little:
+
+| Environment | Clean runs |
+|---|---|
+| kind, Linux CI | 2 of 5 |
+| k3d, Linux CI | 2 of 5 |
+| kind, macOS local | 5 of 8 |
+| OrbStack, macOS | no failures observed |
+
+The dominant error is `probe_timeout`. In one failing run exactly **one of 120 probe requests reached the Pod**, while that Pod was healthy: `/health` answered `{"status":"ok","primary":"up","replica":"up"}` from inside it and Redis was reachable from it. The component was fine; the tunnel to it was not.
+
+Four explanations were tested and eliminated:
+
+- **Image loading.** A first Pod from a freshly loaded image on a cold node reaches Ready in 0.5s.
+- **CoreDNS not yet serving.** Real, and separately fixed — `kind create --wait` returns while CoreDNS is still `ContainerCreating`, which matters because deploy mode wires components through Service DNS (D-020). The failures persisted after the fix.
+- **The budget being too tight.** Raising readiness from 30s to 90s changed nothing; the probe ran the full 91.8s.
+- **The Kubernetes distribution.** kind and k3d measured identically. The distribution is not the variable, which is worth stating because "use a different local cluster" is the obvious first suggestion and it is wrong.
+
+Shared-image-store clusters — OrbStack's and Docker Desktop's built-in Kubernetes — do not exhibit it. That difference is in *when the defect appears*, not in whether the code has it.
+
+**Decision:** The `kubernetes` CI job runs `tests/substrate/kubernetes.test.ts` and `tests/substrate/kubernetes-attach.test.ts`. These drive one component at a time and measured 5 of 5 clean, 54 assertions each run. The job additionally asserts that assertion count, because a test count cannot distinguish a real run from one whose bodies return early. These same two files previously did exactly that: 22 tests reported as passing while executing no assertions, because each body opened with `if (!HAS_K8S) return;`.
+
+The petstore example keeps its Kubernetes coverage in `just pre-release`, run against a shared-image-store cluster.
+
+**This is a scope decision with an expiry, not a permanent boundary.** It is revisited when the adapter can detect a forward that has stopped carrying traffic and re-establish it. Until then the same gap affects any consumer whose cluster is slower than a shared-image-store one, which is most real clusters: this is a library limitation that CI exposed, not a CI limitation.
+
+**Consequences:**
+
+- **The adapter-equivalence claim is no longer checked automatically for two of the five substrates.** The example asserting that the same 16 tests pass everywhere is the strongest claim this project makes, and for Kubernetes it now rests on a person running `just pre-release` before a release. That is the real cost of this decision and it should not be described more comfortably than that.
+- `just pre-release` becomes the only automated check of Kubernetes example parity, which raises what a release depends on. It must be run against a cluster where those paths are deterministic; the default context is a kind cluster, where they are not.
+- CI's Kubernetes coverage is narrower but honest. Before this work those suites ran in CI and asserted nothing at all, so the change is from 22 tests reporting passes without a cluster to 22 tests demanding one.
+- **What is claimed here is bounded by what was observed.** Forwards establish and then stop carrying traffic. The forward itself was never instrumented, so whether the subprocess dies, the stream resets, or the API server times out the connection is unestablished. Anyone picking up the fix should start by measuring that, not by trusting a mechanism this record does not have.
+- Two suites that a contributor may reasonably expect to be reliable are not, on the default cluster. `CONTRIBUTING.md` names them and says which cluster to point at instead.

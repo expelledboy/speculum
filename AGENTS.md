@@ -205,7 +205,7 @@ Two workflows, and what actually triggers them:
 - `.github/workflows/ci.yml` runs on `pull_request` targeting `master` **and on nothing else** — there is deliberately no push trigger, because the pre-merge run already validates the merge result. Three parallel jobs, so a failure in one substrate cannot hide another's result:
   - `unit` — lint, typecheck, build, `tests/core/`, `bun pm pack --dry-run`.
   - `docker` — the adapter suites, then the petstore example against the in-memory, Docker and Docker Compose attach adapters, then the leak gate.
-  - `kubernetes` — a kind cluster, then the Kubernetes **adapter** suites. Not the petstore example: it drives six components at once and the adapter cannot yet recover a `kubectl port-forward` that dies after establishing, which on kind gave 2 clean runs in 5. Those two paths are covered by `just pre-release` instead, against a shared-image-store cluster.
+  - `kubernetes` — a kind cluster, then the Kubernetes **adapter** suites. Deliberately not the petstore example; `just pre-release` covers those two paths instead, against a different cluster. Why, and when that is revisited: [D-049](docs/decisions.md#d-049-ci-runs-the-kubernetes-adapter-suites-not-the-example--one-port-forward-per-component-is-not-yet-survivable).
 
   Both substrate jobs set `CYANOTYPE_REQUIRE_DOCKER` / `CYANOTYPE_REQUIRE_K8S`, so a substrate the job provisioned and then could not reach fails the build instead of skipping. The Kubernetes job also asserts the ASSERTION count, not just the test count: a test count cannot tell a real run from one whose bodies return early, which is the defect that made these suites report 22 hollow passes in the first place.
 - `.github/workflows/release.yml` runs on pushing a tag matching `v*.*.*`. It runs `bun run prepublishOnly`, publishes to npm through Trusted Publishers OIDC (no token; provenance is automatic), then extracts the matching CHANGELOG section and creates a GitHub Release from it.
@@ -233,7 +233,7 @@ It is a **strict superset of CI**: everything the workflow runs, plus git state,
 tag availability, the built CLI, and the two Kubernetes petstore paths the
 workflow cannot run. Green CI is necessary and not sufficient. Point
 `CYANOTYPE_K8S_CONTEXT` at OrbStack or Docker Desktop before running it — those
-two paths are flaky on kind.
+two paths are not reliable on kind ([D-049](docs/decisions.md#d-049-ci-runs-the-kubernetes-adapter-suites-not-the-example--one-port-forward-per-component-is-not-yet-survivable)).
 
 Three reasons it exists, none of which the workflows cover:
 

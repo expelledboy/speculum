@@ -37,13 +37,12 @@ must be copied in, which `just test-petstore-k8s` does for you. Nothing
 verifies the shared-store clusters automatically, so a break there will be
 found by a person rather than by CI.
 
-**One suite needs a shared-image-store cluster today.** `just test-petstore-k8s`
-and `just test-petstore-k8s-attach` are flaky on kind: the example drives six
-components at once, and the Kubernetes adapter opens one `kubectl port-forward`
-per component with no recovery for one that dies after establishing. Measured at
-2 clean runs in 5 on kind and the same on k3d, against none on OrbStack. Point
-`CYANOTYPE_K8S_CONTEXT` at OrbStack or Docker Desktop for those two, and for
-`just pre-release`, which runs them.
+**Two recipes need a shared-image-store cluster today.** `just
+test-petstore-k8s` and `just test-petstore-k8s-attach` are not reliable on kind,
+and neither is `just pre-release`, which runs them. Point
+`CYANOTYPE_K8S_CONTEXT` at OrbStack or Docker Desktop for those three. The
+reason, the measurements and the condition for revisiting it are in
+[D-049](./docs/decisions.md#d-049-ci-runs-the-kubernetes-adapter-suites-not-the-example--one-port-forward-per-component-is-not-yet-survivable).
 
 The **adapter suites** — `just test-adapter-k8s` and `just
 test-adapter-k8s-attach`, which live in `tests/substrate/` and exercise one
