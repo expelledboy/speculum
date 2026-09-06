@@ -26,9 +26,12 @@ What actually happened.
 
 ## Environment
 
+- Cyanotype version:
 - Bun version (`bun --version`):
-- OS:
-- Adapter mode (`memory` / `docker` / `docker-attach` / `k8s` / `k8s-attach`):
+- OS and architecture:
+- Docker version (`docker --version`) — the Docker adapter needs Engine 20.10+:
+- Adapter (`memory` / `docker` / `docker-attach` / `k8s` / `k8s-attach` / `composite`):
+- For Kubernetes: which cluster (kind / OrbStack / Docker Desktop / remote):
 
 ## Logs / relevant output
 

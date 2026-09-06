@@ -46,7 +46,7 @@ Six user-facing entities. Each maps to a TypeScript type. Inference helpers (`de
 | **`Binding<B>`** | A Blueprint paired with substrate-bound fields: `image`, `version`, `config: C`, `env: E`, host port assignments, optional `mounts`, optional `logParser`, optional `labels`, optional `adapter?: AdapterConfig` (adapter-specific overrides — see [Adapter-specific Binding config](#adapter-specific-binding-config-d-022) below). | `src/binding.ts` |
 | **`Environment`** | A record of named Bindings or multi-instance groups (`Record<instance, Binding>`). The composition. `createEnvironment(record)` validates reserved names. | `src/environment.ts` |
 | **`Runtime<E>`** | What `startEnvironment` / `attachEnvironment` returns. Type-derived from the Environment. Components at the top level + `chaos` / `snapshot` / `metadata` / `stop` system ops. Exposes the Blueprint surface only — Binding substrate fields are invisible. | `src/runtime.ts` |
-| **`Adapter`** | The IO boundary, and the single point where real-vs-fake is decided. Docker / K8s / in-memory implementations. Seven methods. | `src/adapter.ts` |
+| **`Adapter`** | The IO boundary, and the single point where real-vs-fake is decided. Docker / K8s / in-memory implementations. Seven required methods plus one optional, `reconnect` (D-046). | `src/adapter.ts` |
 | **`SharedEnvs`** | The multi-env, multi-process registry. `createSharedEnvs(registry, options)` returns a handle with `ensure` / `attach` / `use` / `stopAll`. | `src/shared.ts` |
 
 ## The layer map
@@ -60,7 +60,7 @@ Six user-facing entities. Each maps to a TypeScript type. Inference helpers (`de
 │  const pet = await runtime.petstore.one.api.http.createPet(…);  │
 │  const ev  = await runtime.petstore.one.events.waitFor(…);      │
 └─────────────────────────┬───────────────────────────────────────┘
-                          │  Public API (src/index.ts + src/index.d.ts)
+                          │  Public API (src/index.ts; .d.ts emitted at build)
 ┌─────────────────────────┴───────────────────────────────────────┐
 │  Cyanotype types (src/*.ts)                                      │
 │  ──────────────                                                 │
@@ -131,8 +131,7 @@ Smaller pieces that live in their own files:
 | `probe.ts` | `Probe<I>` (HTTP + custom), `runProbe` | Lives on Blueprint (readiness/health are part of the contract) |
 | `metadata.ts` | `EnvironmentMetadata`, `SlotSnapshot`, `ComponentSnapshot` | Cross-process JSON snapshot; one concept, one file |
 | `invariants.ts` | `invariant`, `enableInvariants` | Cross-module agreements types cannot state; off unless enabled (D-042) |
-| `index.d.ts` | Re-exports of all public TYPES | The type contract |
-| `index.ts` | Re-exports of all public VALUES (factories, helpers) | The runtime entry |
+| `index.ts` | The public surface — re-exports both values and types | The matching `.d.ts` is emitted by `tsc` at build; there is no hand-written one |
 
 ## Adapter-specific Binding config (D-022)
 

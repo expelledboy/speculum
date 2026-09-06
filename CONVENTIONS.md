@@ -45,7 +45,10 @@
 
 ## Tests
 
-- All implementation modules have a test file at `tests/core/<module>.test.ts`.
+- Every implementation module has a test file. `tests/core/<module>.test.ts` for
+  anything testable without a substrate; `tests/substrate/<module>.test.ts` for
+  adapter behaviour that needs a real Docker daemon or cluster. A substrate suite
+  that cannot reach its substrate reports `skip`, never `pass`.
 - Use `bun:test`: `import { describe, test, expect, beforeAll } from "bun:test"`.
 - Test names: `describe("<module>/<concern>")`, `test("<expected behavior>")`.
 - See `tests/core/_template.test.ts` for the canonical shape.
