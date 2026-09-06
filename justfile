@@ -101,30 +101,30 @@ kind-up:
 kind-down:
     kind delete cluster --name {{ trim_start_match(k8s_context, "kind-") }}
 
-# Kubernetes adapter suite. Needs kubectl + a reachable cluster.
+# Kubernetes adapter suite. Reliable on the default kind cluster; CI runs this.
 [group('kubernetes')]
 test-adapter-k8s:
     CYANOTYPE_K8S_CONTEXT={{ k8s_context }} bun test tests/substrate/kubernetes.test.ts
 
-# Kubernetes attach-mode adapter suite (denylist tests run offline; rest need a cluster).
+# K8s attach-mode adapter suite. Reliable on kind; denylist tests need no cluster.
 [group('kubernetes')]
 test-adapter-k8s-attach:
     CYANOTYPE_K8S_CONTEXT={{ k8s_context }} bun test tests/substrate/kubernetes-attach.test.ts
 
-# Petstore example suite on Kubernetes (Cyanotype deploys the workloads).
+# Petstore example on Kubernetes. NOT reliable on kind — needs OrbStack/Docker Desktop (D-049).
 [group('kubernetes')]
 test-petstore-k8s: load-k8s-images
     CYANOTYPE_ADAPTER=k8s CYANOTYPE_K8S_CONTEXT={{ k8s_context }} bun test tests/petstore-example
+
+# Petstore example attached to a cluster this deploys. NOT reliable on kind (D-049).
+[group('kubernetes')]
+test-petstore-k8s-attach: deploy-petstore-k8s-attach derive-petstore-attach
+    CYANOTYPE_K8S_CONTEXT={{ k8s_context }} bun scripts/attach-suite.ts k8s
 
 # Print every error, its trigger, and the hint a consumer gets. Optional filter.
 [group('quality')]
 hints filter="":
     bun scripts/hints.ts {{ filter }}
-
-# Petstore example suite attached to a cluster this recipe deploys and tears down.
-[group('kubernetes')]
-test-petstore-k8s-attach: deploy-petstore-k8s-attach derive-petstore-attach
-    CYANOTYPE_K8S_CONTEXT={{ k8s_context }} bun scripts/attach-suite.ts k8s
 
 # ─── internal helpers (hidden from `just --list`) ────────────────────────
 
