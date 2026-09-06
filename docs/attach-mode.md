@@ -36,6 +36,19 @@ Use **deploy** mode instead (`createDockerAdapter({ mode: "deploy" })`) when:
 
 **Hard constraint:** services under test MUST publish their ports to the host using `ports:` in the Compose file. A service that only uses `expose:` (internal-only) cannot be reached by Cyanotype and will fail at attach time with `compose_attach_service_not_found` or `port_not_bound`.
 
+**Second hard constraint, and it is easy to miss because deploy mode hides it:** if your services reach each other through `host.docker.internal`, your Compose file must give each of them that name itself.
+
+```yaml
+services:
+  api:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+```
+
+Docker Desktop and OrbStack define the name inside every container, so this is invisible on a Mac and mandatory on Linux. In **deploy** mode Cyanotype sets it for you, because it creates the containers ([D-048](decisions.md#d-048-the-docker-adapter-asks-for-hostdockerinternal-it-no-longer-assumes-the-runtime-defines-it)). In **attach** mode it creates nothing — that is the entire point of attach mode — so the alias is yours to supply, and its absence surfaces as a component that starts correctly, passes `exists()`, and then fails readiness with a timeout naming itself rather than the name it could not resolve.
+
+This repository's own attach fixture, `tests/support/compose/petstore-attach/compose.yaml`, carries it on all six services for exactly this reason.
+
 ## The flow at a glance
 
 ```

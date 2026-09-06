@@ -289,6 +289,8 @@ tests/
   substrate/            Adapter integration against real Docker and Kubernetes
   fakes/                Reusable in-process simulators for Blueprints
   petstore-example/     End-to-end SLA suite (runs across all five adapters)
+  support/require-substrate.ts  Availability probes + CYANOTYPE_REQUIRE_* (skip vs fail)
+  support/images.json   Upstream images, their GHCR mirror, and recorded ids
   support/containers/   Dockerfiles for the test images
   support/k8s/
     petstore-attach/    K8s manifests for the k8s-attach fixture topology
@@ -301,6 +303,22 @@ docs/
   design.md             Architecture map, concept relationships, type flows
   attach-mode.md        Walkthrough for attach mode against K8s clusters and Docker Compose stacks
   k8s-rbac.md           RBAC requirements + cluster setup for the K8s adapter
+
+scripts/                Repository tooling. Gates are silent on success and print
+                        the whole story between two [GATE] lines on failure.
+  pre-release.ts        Gate: is this tree releasable? (superset of CI)
+  check-no-leaks.ts     Gate: no Cyanotype containers survived the suite
+  prime-images.ts       Gate: upstream images present, pulled from the mirror
+  k8s-load-images.ts    Gate: the cluster can see the built images
+  kind-up.ts            Create the standard kind cluster; waits for DNS
+  mirror-images.ts      Copy upstream images to GHCR; run by the monthly workflow
+  attach-suite.ts       Run the example against a pre-deployed stack, tear it down
+  hints.ts              Render every error, its trigger, and its hint
+
+.github/workflows/
+  ci.yml                Three jobs on every PR: unit, docker, kubernetes
+  release.yml           Publishes to npm on a v*.*.* tag (Trusted Publishers)
+  mirror-images.yml     Monthly image refresh; opens a PR rather than pushing
 
 bunfig.toml             Registers tests/preload.ts as the test preload
 CONVENTIONS.md          Coding discipline (read before writing code)
