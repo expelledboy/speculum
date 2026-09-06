@@ -7,8 +7,17 @@
 # people's do. Mirroring removes the dependency instead of shrinking it —
 # GitHub Container Registry has no pull rate limit for public packages.
 #
+# IT PRODUCES LINUX/AMD64 IMAGES, because it copies with pull/tag/push and this
+# runner is amd64 — the pushed artifacts are single-platform, not manifest
+# lists. That is the mirror's defining constraint and the reason
+# scripts/prime-images.ts refuses to run on any other platform. Making it
+# multi-architecture would mean `docker buildx imagetools create`; not done,
+# because CI is the only consumer and CI is amd64.
+#
 # WHAT IT DOES NOT FIX. Contributors running the suites locally still pull from
-# Docker Hub. This is a CI measure only.
+# Docker Hub — which is fine, because they are not competing for a shared
+# runner address, which is the whole problem being solved. This is a CI
+# measure only.
 #
 # ITS OWN FAILURE IS BENIGN. This job is the one place that still touches Docker
 # Hub, once a month. If it is throttled, CI keeps using last month's mirror and

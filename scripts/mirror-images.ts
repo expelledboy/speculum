@@ -8,10 +8,17 @@
  * what it did, because a human reads the resulting diff to see whether a
  * floating upstream tag moved.
  *
+ * IT COPIES ONE ARCHITECTURE. `docker pull` here resolves the source manifest
+ * list to this runner's platform, and `docker push` publishes that single
+ * image — so the mirror holds linux/amd64 and nothing else. Every consumer of
+ * the mirror inherits that constraint, which is why `scripts/prime-images.ts`
+ * refuses to run elsewhere rather than silently retagging an amd64 image over
+ * a working local one.
+ *
  * The recorded `id` is the image CONFIG digest, which survives being copied
  * between registries — the manifest digest does not, so it could not verify
- * anything on the far side. It is platform-specific, and this workflow runs on
- * linux/amd64, which is what `scripts/prime-images.ts` checks against.
+ * anything on the far side. Being a config digest it is platform-specific,
+ * which is consistent with the artifacts rather than a separate limitation.
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
