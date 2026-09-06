@@ -1,8 +1,18 @@
 name: CI
 
 on:
-  # PR-only — the pre-merge run already validates the merge result, so a
-  # second run on push to master would be redundant.
+  # PULL REQUESTS ONLY, and that is now a decision rather than an inheritance.
+  #
+  # A push trigger on master would be redundant: the pre-merge run already
+  # validates the merge result. The question worth asking was the other one —
+  # what changes CI's inputs WITHOUT a pull request? Exactly one thing: the
+  # monthly mirror refresh, which moves the upstream images every job pulls.
+  # That is why `mirror-images.yml` opens a pull request instead of pushing, so
+  # the refresh is checked by this workflow like anything else.
+  #
+  # With that closed there is nothing a scheduled run would catch that this
+  # does not, and a schedule would produce failures on the default branch at a
+  # time nobody is watching.
   pull_request:
     branches: [master]
 
@@ -89,11 +99,23 @@ jobs:
       - uses: extractions/setup-just@v3
       - run: bun install --frozen-lockfile
 
-      - name: Install kind
+      # Both pinned for the same reason Bun is: the runner image's own versions
+      # move without a commit here, and this job exists to detect changes in
+      # THIS repository's behaviour. kubectl is not incidental — the adapter
+      # shells out to it for every cluster operation (D-019).
+      - name: Install kind and kubectl
+        env:
+          KIND_VERSION: v0.33.0
+          # Matches kind v0.33.0's default node image (kindest/node:v1.37.0).
+          # Kubernetes supports kubectl within one minor of the API server, so
+          # these two move together or the skew check is the thing that breaks.
+          KUBECTL_VERSION: v1.37.0
         run: |
-          curl -sSLo ./kind https://kind.sigs.k8s.io/dl/v0.33.0/kind-linux-amd64
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
+          curl -sSLo ./kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          curl -sSLo ./kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          chmod +x ./kind ./kubectl
+          sudo mv ./kind ./kubectl /usr/local/bin/
+          kubectl version --client
 
       - run: bun scripts/prime-images.ts
       - run: just build-test-images

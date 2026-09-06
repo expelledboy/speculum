@@ -28,8 +28,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  packages: write
+  contents: write        # push the refresh branch
+  packages: write        # push the mirrored images
+  pull-requests: write   # open the refresh pull request
 
 concurrency:
   group: mirror-images
@@ -51,18 +52,42 @@ jobs:
       - name: Mirror each image and record what was mirrored
         run: bun scripts/mirror-images.ts
 
-      - name: Commit the recorded ids, if they changed
+      # OPENS A PULL REQUEST RATHER THAN PUSHING TO master, for two reasons that
+      # arrived together.
+      #
+      # A refreshed id means an upstream floating tag now points at different
+      # content — `nginx:alpine` is not a fixed thing. That is the only moment
+      # the images CI depends on change, and pushing it straight to master
+      # would be the one change nothing tests. As a pull request it goes
+      # through the same three jobs as any other change, so drift is caught by
+      # the mechanism that already exists instead of by a scheduled run
+      # invented to look for it.
+      #
+      # It also removes a conflict with branch protection: a bot pushing to a
+      # protected master needs an exemption, and the exemption would apply to
+      # the one commit nobody reviewed.
+      - name: Open a pull request with the refreshed ids, if they changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if git diff --quiet tests/support/images.json; then
             echo "No change — the mirror already matched upstream."
             exit 0
           fi
+          branch="images/refresh-$(date -u +%Y-%m)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
           git add tests/support/images.json
           git commit -m "chore(images): refresh the upstream mirror
 
           Monthly refresh of the images CI pulls. A changed id means the
           upstream floating tag now points at different content; the diff is
           the point, since that is the only place this pin is visible."
-          git push
+          git push --force-with-lease -u origin "$branch"
+          gh pr create --base master --head "$branch" \
+            --title "chore(images): refresh the upstream mirror" \
+            --body "Monthly mirror refresh. A changed id means an upstream floating tag moved; the diff is the only place that pin is visible.
+
+          CI running on this pull request is what checks the new images, which is why this is a pull request and not a push." \
+            || gh pr edit "$branch" --body "Monthly mirror refresh (updated $(date -u +%Y-%m-%d))." 
