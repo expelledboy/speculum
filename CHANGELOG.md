@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-09-07
+
 ### Changed
 
 - The two exported adapter-config schemas, `K8sAdapterConfigSchema` and
@@ -27,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **Narrowing, so worth checking if you use it:** `z.ZodType<T>` does not carry
   `.shape` or `.extend()`. Code calling either on those two exported constants
   will no longer compile. Nothing in this repository did.
+
+- The published declarations are now emitted by TypeScript 7 rather than 5.9.
+  Nothing in the public API changed meaning; the only observable difference is
+  ordering, where property and union-member order shifted in the `.d.ts` text
+  (`"ignore" | "warn" | "fail"` now prints as `"fail" | "ignore" | "warn"`).
+  Union member order does not affect type identity or assignability.
 
 ## [0.7.0] - 2026-09-06
 
@@ -549,7 +557,9 @@ Initial public release. Developer preview — pre-1.0, expect minor-version brea
 - Only HTTP and Opaque protocols implemented; TCP/gRPC/SOAP deferred
 - OrbStack K8s degrades under prolonged port-forward + rollout-restart load (kind/remote recommended for sustained CI)
 
-[Unreleased]: https://github.com/expelledboy/cyanotype/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/expelledboy/cyanotype/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/expelledboy/cyanotype/releases/tag/v0.7.1
+[0.7.0]: https://github.com/expelledboy/cyanotype/releases/tag/v0.7.0
 [0.6.0]: https://github.com/expelledboy/cyanotype/releases/tag/v0.6.0
 [0.5.0]: https://github.com/expelledboy/cyanotype/releases/tag/v0.5.0
 [0.4.2]: https://github.com/expelledboy/cyanotype/releases/tag/v0.4.2
