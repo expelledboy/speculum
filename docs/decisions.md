@@ -1112,6 +1112,12 @@ That 2×2, plus one query, is five primitives:
 
 plus `find(selector) -> Ref[]`.
 
+Three terms both this entry and D-051 use repeatedly, defined here because neither is a type that exists in the codebase today:
+
+- **Kernel** — those five primitives taken together: the smallest set of adapter operations from which every method in the current SPI can be derived. Wherever either entry says "the kernel", it means this set and nothing more.
+- **`Ref`** — an opaque, JSON-serialisable handle naming a substrate object (a container or a Pod) that outlives the process holding it. The nearest thing today is `ComponentSnapshot.containerId` in `src/metadata.ts`.
+- **`Access`** — the process-local counterpart: whatever this process opened in order to REACH a `Ref`, such as a port-forward, a log stream, or a client handle. It dies with the process. The nearest thing today is `Started.ports` plus the child processes an adapter holds privately.
+
 Every current method is a composition of those:
 
 | Today | Derives as |
