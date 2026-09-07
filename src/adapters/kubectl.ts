@@ -8,7 +8,23 @@
 
 import readline from "node:readline";
 import { Readable } from "node:stream";
-import type { Subprocess } from "bun";
+/**
+ * The subset of a spawned process this codebase consumes.
+ *
+ * Declared here rather than imported as `Subprocess` from "bun" because these
+ * types are emitted into the published .d.ts. `@types/bun` is a devDependency,
+ * so a Node consumer compiling with `skipLibCheck: false` hit
+ * `TS2307: Cannot find module 'bun'` on a type they never asked for. Mirrors
+ * `DockerClient` in the Docker adapter, which captures dockerode's consumed
+ * surface without taking `@types/dockerode` as a dependency.
+ */
+export type SpawnedProcess = {
+  readonly stdout: unknown;
+  readonly stderr: unknown;
+  readonly stdin: unknown;
+  readonly exited: Promise<number>;
+  kill(code?: number): void;
+};
 
 export type KubectlMode = "deploy" | "attach";
 
@@ -22,7 +38,7 @@ export type KubectlStream = {
   readonly lines: AsyncIterable<string>;
   kill(): void;
   readonly exited: Promise<number>;
-  readonly proc: Subprocess;
+  readonly proc: SpawnedProcess;
 };
 
 export type KubectlClient = {

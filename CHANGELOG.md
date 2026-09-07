@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-09-07
+
+### Fixed
+
+- **A project using zod 4 could not compile against this package.** `zod` was a
+  normal dependency pinned to `^3`, so a consumer on zod 4 got a second, nested
+  zod 3 installed underneath us. Their `z.object(...)` then failed to satisfy
+  our `ZodTypeAny`, which resolved to that nested copy —
+  `TS2345: … is not assignable to parameter of type 'HttpRouteMap'`.
+
+  `zod` is now a **peer dependency** with the range `^3.23.0 || ^4.0.0`, so the
+  consumer's copy is the only copy and our published types resolve against it.
+  Both majors are verified on every commit. npm 7+ and Bun install missing peer
+  dependencies automatically; if your package manager does not, add `zod` to
+  your own dependencies.
+
+  This is what v0.7.1's declaration change was aiming at and did not reach. That
+  release made the emitted `.d.ts` text independent of the zod major, which was
+  necessary but not sufficient — the types still bound to whichever zod sat
+  nearest the declaration file.
+
+- **The published declarations referenced Bun's types.** `dist/adapters/kubectl.d.ts`
+  declared `import type { Subprocess } from "bun"`, and `@types/bun` is a
+  development dependency here. Any consumer compiling with `skipLibCheck: false`
+  failed with `TS2307: Cannot find module 'bun'` on a type they never used —
+  contradicting this package's claim to be usable from Node. The consumed
+  surface is now declared locally as `SpawnedProcess`, the way the Docker
+  adapter already handles dockerode without `@types/dockerode`.
+
+### Added
+
+- `just consumer-types` builds the package as npm would and compiles a real
+  consumer against it, once per zod major in the peer range, with
+  `skipLibCheck: false`. It runs in CI and in `just pre-release`. Both defects
+  above were invisible to every existing suite, because those run inside this
+  repository's own `node_modules` where zod resolves to one copy and
+  `@types/bun` is always installed.
+
 ## [0.7.1] - 2026-09-07
 
 ### Changed
@@ -557,7 +595,8 @@ Initial public release. Developer preview — pre-1.0, expect minor-version brea
 - Only HTTP and Opaque protocols implemented; TCP/gRPC/SOAP deferred
 - OrbStack K8s degrades under prolonged port-forward + rollout-restart load (kind/remote recommended for sustained CI)
 
-[Unreleased]: https://github.com/expelledboy/cyanotype/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/expelledboy/cyanotype/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/expelledboy/cyanotype/releases/tag/v0.7.2
 [0.7.1]: https://github.com/expelledboy/cyanotype/releases/tag/v0.7.1
 [0.7.0]: https://github.com/expelledboy/cyanotype/releases/tag/v0.7.0
 [0.6.0]: https://github.com/expelledboy/cyanotype/releases/tag/v0.6.0
