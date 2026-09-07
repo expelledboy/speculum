@@ -38,8 +38,21 @@
 
 ## File layout
 
+- **Every budget below counts CODE lines** — blank lines and comment lines excluded. Say which unit you are using whenever you quote one of these numbers, because the two answers differ a lot: comments are 24% of `src/` overall and up to 71% in a file like `src/adapter.ts`, which is mostly interface documentation.
 - **File LoC: typical ~200, redesign before 400.** Most files are one concept and should fit in 200 lines. IO-procedural code (the orchestrator, the Docker adapter) is allowed to be larger when splitting would be artificial separation of cohesive logic — but if a file is approaching 400, the design is probably wrong.
-- **Whole-project budget: ~2500 LoC of source.** If the project is heading past 3000, a concept is missing — stop and find it before adding more.
+
+  Two files are over it today and are recorded here rather than left to be rediscovered: `src/adapters/docker.ts` at 701 and `src/adapters/kubernetes.ts` at 965. Both are a single `create…Adapter` closure defining every SPI method over shared mutable session state, which is why they are large while measuring almost no branching complexity (cognitive 0 and 1, nesting 0). The route back under 400 is to split them along the deploy/attach seam that already exists in every method — measured at 179 attach-specific and 145 deploy-specific lines in `docker.ts`, 334 and 258 in `kubernetes.ts`. Nobody is required to do that before touching these files; it is written down so the exception is visible rather than silently tolerated.
+- **Budgets are per layer, not one number for the repository.** This REPLACES an earlier single "whole-project budget: ~2500 LoC of source", which was written when the project had one adapter and no attach modes, and which by 2026-09 read as ~2500 against a measured 4765. Measuring the layers separately showed why, and the answer was not that the rule had been ignored:
+
+  | Layer | Budget | Measured 2026-09 |
+  |---|---|---|
+  | `src/` core — the harness | **~2500** | **2504** |
+  | `src/adapters/` | per adapter, see below | 1958 total |
+  | `src/cli/` | ~400 | 303 |
+
+  **The core budget was never breached.** The entire overrun is the pluggable substrate layer, which grew by deliberate decision each time — D-018, D-025, D-030, D-038, D-046 — and a single repository-wide number could not distinguish "a concept is missing" from "a substrate was added on purpose". Keep the core figure exactly as it was and hold it hard: if the harness heads past 3000, a concept IS missing, and that is the signal the original rule existed to give.
+- **Adapters are budgeted individually, because they are additive by design.** Each new adapter arrives with its own decision record, so adding one is never evidence that the design has gone wrong. Roughly ~150 for an adapter that wraps an in-process or CLI substrate, and up to ~700 for one driving a real daemon or cluster API. Measured 2026-09: `memory` 102, `composite` 101, `kubectl` 89, `docker` 701, `kubernetes` 965. A NEW adapter arriving above ~700 is the thing to stop and question.
+- **These numbers are a smell test, not a gate.** Nothing enforces them and nothing should: no measurement here predicts defects, and the one large study of refactoring in the wild found refactoring commits slightly RAISE the odds of inducing a later fix. They exist to prompt the question "is a concept missing?", and D-050 is what that question looked like when it was actually asked.
 - **Runtime values live in the same file as their types** when natural (e.g. `EventBus<Cat>` type and `createEventBus()` value both in `src/events.ts`).
 - **`src/index.ts` is the public surface** — it re-exports both values and types. The matching `.d.ts` is emitted by `tsc` at build time; there is no hand-written `index.d.ts`. Add an export only when something is truly user-facing.
 
@@ -66,4 +79,4 @@ The temptation in a harness like this is to over-engineer: event stores, idempot
 
 - **If the spec is ambiguous, STOP and report.** Don't invent semantics. Don't choose between two reasonable interpretations — surface the choice.
 - **If a test would require more than a trivial fake to write, STOP and report.** That's a design smell.
-- **If LoC is heading past 400 for a single module, STOP and report.** Either the module is eating a neighbour's job or the design is wrong.
+- **If LoC is heading past 400 for a single module, STOP and report.** Either the module is eating a neighbour's job or the design is wrong. The two files already over it are named in "File layout" above, with the reason and the route back; a THIRD one is a new finding and worth surfacing.
