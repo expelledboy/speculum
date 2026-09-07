@@ -1182,7 +1182,7 @@ That work is `detach` in D-050's vocabulary. So `teardown` derives from `find` A
 | | `docker` | `kubernetes` | `memory` | `composite` |
 |---|---|---|---|---|
 | `teardown` | 34 lines | 33 lines, cognitive 28 | a noop | fans out to sub-adapters — stays either way |
-| `exists` | 29 lines | 15 lines | one line | routes on the id prefix — stays either way |
+| `exists` | 29 lines | 16 lines | one line | routes on the id prefix — stays either way |
 
 **Finding 4, and this one is new information rather than a correction.** Any `Ref` type the kernel introduces must survive a JSON round-trip between two operating-system processes. `ComponentSnapshot.containerId` is a `string` written into a `schemaVersion: 1` metadata file by the process that deploys and read back by the process that attaches. `src/adapters/composite.ts` already documents this as the reason its routing travels INSIDE the container id (`<routeKey>::<id>`) instead of in a lookup map: the attaching process has no map. So a richer `Ref` is a metadata schema version bump carrying a cross-version attach migration — a cost D-050 did not name, and the one least visible to a single-process test.
 
