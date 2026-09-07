@@ -1112,6 +1112,12 @@ That 2×2, plus one query, is five primitives:
 
 plus `find(selector) -> Ref[]`.
 
+Three terms both this entry and D-051 use repeatedly, defined here because neither is a type that exists in the codebase today:
+
+- **Kernel** — those five primitives taken together: the smallest set of adapter operations from which every method in the current SPI can be derived. Wherever either entry says "the kernel", it means this set and nothing more.
+- **`Ref`** — an opaque, JSON-serialisable handle naming a substrate object (a container or a Pod) that outlives the process holding it. The nearest thing today is `ComponentSnapshot.containerId` in `src/metadata.ts`.
+- **`Access`** — the process-local counterpart: whatever this process opened in order to REACH a `Ref`, such as a port-forward, a log stream, or a client handle. It dies with the process. The nearest thing today is `Started.ports` plus the child processes an adapter holds privately.
+
 Every current method is a composition of those:
 
 | Today | Derives as |
@@ -1138,16 +1144,20 @@ Every current method is a composition of those:
 
 | | today | under the kernel |
 |---|---|---|
-| Method implementations | 8 methods x 6 adapters = **48** | 5 primitives x 3 real substrates = **15** |
+| Adapter-side method implementations | **29** | 5 primitives x 4 adapters = **20** |
 | Derived layer | re-implemented per adapter | **5** functions, written once in core |
 | Mode branches | **44** | none — an absent capability is untyped, not unbranched |
-| Total units | **48** | **20** |
+| Total | **29** in adapters | **20** in adapters, plus 5 written once in core |
 
-`composite` routes rather than implements, and `kubectl.ts` is a helper; the three substrates needing primitives are Docker, Kubernetes and in-memory.
+**CORRECTION, made after this entry was first merged.** The two rows above originally read "8 methods x 6 adapters = **48**" and a total of **48**, and both were wrong. There are FOUR adapter factories, not six -- `createDockerAdapter`, `createK8sAdapter`, `createInMemoryAdapter`, `createCompositeAdapter` -- and the sixth and fifth were phantoms produced by counting substrate CONFIGURATIONS (Docker deploy, Docker attach, Kubernetes deploy, Kubernetes attach, in-memory, composite) as though each were its own implementation. The optional eighth method was also multiplied across all of them when it is implemented exactly once: `reconnect` exists only in the Kubernetes adapter and only in deploy mode (`...(mode === "deploy" ? { reconnect } : {})`), Docker and in-memory do not mention it at all, and `composite` omits it deliberately with its reasoning recorded in the source. Counted rather than multiplied: 7 required methods x 4 adapters = 28, plus that one optional implementation = **29**.
+
+The corrected figures are kept in the table above rather than left wrong with an erratum further down, because a table of measurements that a reader must scroll past a correction to distrust is worse than no table. This paragraph records what the numbers were and why they changed. Nothing else in the entry moved: the axes, the five primitives, the derivation table and the 44 branch sites were measured rather than multiplied and are unaffected. `kubectl.ts` remains a helper rather than an adapter. `composite` routes rather than driving a substrate, but still has to implement the primitives to route them, which is why it is counted in the 20.
+
+**How the measurements above were produced**, since a number with no method behind it cannot be checked: cognitive complexity and nesting depth come from `eslint-plugin-sonarjs` via a wrapper, run over `src/`; line counts exclude blank and comment lines; the branch-site count is a grep for `mode === "attach"`, `mode === "deploy"` and `containerId.startsWith("attach:")` across the two adapters. "Mode" here means the `deploy` / `attach` distinction those branches test: a DEPLOY-mode adapter creates and destroys the workload, an ATTACH-mode adapter binds to one that something else created and must never destroy it.
 
 **What argues against adopting it:**
 
-- **The measurement found no structural problem.** Nothing is deeply nested or tangled. This is an argument from structure, not from pain, and those are different claims. The honest statement is that the SPI carries a conflation costing roughly 28 units of duplicated surface — not that the code is bad.
+- **The measurement found no structural problem.** Nothing is deeply nested or tangled. This is an argument from structure, not from pain, and those are different claims. The honest statement is that the SPI carries a conflation costing nine adapter-side implementations (29 today against 20) plus a derived layer currently written per adapter instead of once — not that the code is bad. An earlier version of this sentence claimed "roughly 28 units of duplicated surface", which was the difference between two wrong totals and meant nothing.
 - **It is a rewrite of the adapter layer**, roughly 2000 lines, replacing code that is working, tested and shipped, including D-046 and D-047 which were expensive to get right.
 - **No evidence supports it reducing defects.** The largest study of refactoring in the wild found refactoring commits slightly raise the odds of inducing a later fix. Any case for this rests on the surface being smaller and the capability being typed, not on reliability.
 - **Bulk deletion must survive it.** Kubernetes teardown is a single `kubectl delete -l session` call; a naive `find` then map-`destroy` would be N calls. `destroy` therefore takes a SELECTOR, not an id — Docker folds internally, Kubernetes does not. The primitive is shaped for both, but only because it was checked.
@@ -1169,14 +1179,14 @@ Every current method is a composition of those:
 
 That work is `detach` in D-050's vocabulary. So `teardown` derives from `find` AND `detach` AND `destroy(selector)` — three of the five primitives, which is most of the kernel rather than a slice of it.
 
-**Finding 2 — a derived `exists` loses behaviour that is load-bearing.** `exists` in the Docker adapter returns false for a chaos-PAUSED attach binding, and false for a container that is present but not running. The first is process-local state, the second is status; `find({id})` being non-empty carries neither. This is not cosmetic: `chaosStop` is VERIFIED by polling `exists`, so a naive derivation would silently break chaos verification rather than fail to compile.
+**Finding 2 — a derived `exists` loses behaviour that is load-bearing.** `exists` in the Docker adapter returns false for a chaos-PAUSED attach binding, and false for a container that is present but not running. (CHAOS here is the framework's deliberate fault injection: a test asks for a running component to be stopped, so that the system under test can be observed coping with it. `chaosStop` is the call that does the stopping.) The first is process-local state, the second is status; `find({id})` being non-empty carries neither. This is not cosmetic: `chaosStop` is VERIFIED by polling `exists`, so a naive derivation would silently break chaos verification rather than fail to compile.
 
 **Finding 3 — the saving was overstated.** D-050 implied one hand-written implementation per adapter. Measured, there are two substantial ones and two that are not substrate operations at all:
 
 | | `docker` | `kubernetes` | `memory` | `composite` |
 |---|---|---|---|---|
 | `teardown` | 34 lines | 33 lines, cognitive 28 | a noop | fans out to sub-adapters — stays either way |
-| `exists` | 29 lines | 15 lines | one line | routes on the id prefix — stays either way |
+| `exists` | 29 lines | 16 lines | one line | routes on the id prefix — stays either way |
 
 **Finding 4, and this one is new information rather than a correction.** Any `Ref` type the kernel introduces must survive a JSON round-trip between two operating-system processes. `ComponentSnapshot.containerId` is a `string` written into a `schemaVersion: 1` metadata file by the process that deploys and read back by the process that attaches. `src/adapters/composite.ts` already documents this as the reason its routing travels INSIDE the container id (`<routeKey>::<id>`) instead of in a lookup map: the attaching process has no map. So a richer `Ref` is a metadata schema version bump carrying a cross-version attach migration — a cost D-050 did not name, and the one least visible to a single-process test.
 
