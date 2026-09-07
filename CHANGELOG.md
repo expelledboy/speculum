@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The two exported adapter-config schemas, `K8sAdapterConfigSchema` and
+  `ComposeAdapterConfigSchema`, are now declared as `z.ZodType<T>` rather than
+  letting TypeScript infer `z.ZodObject<...>`. The emitted `.d.ts` names `zod`
+  by module specifier, so it resolves against the zod copy in the CONSUMER's
+  project — and the inferred form embedded zod's own generic arity, which
+  differs between majors (`ZodObject<Shape, "strip", ZodTypeAny, Output, Input>`
+  in zod 3, `ZodObject<Shape, $strip>` in zod 4). A consumer whose zod resolved
+  to a different major than this package was built against therefore saw type
+  errors on those two constants. The public declarations are now byte-identical
+  whether built against zod 3.25.76 or zod 4.x, and `zod` stays a `^3.23.0`
+  dependency for now.
+
+  Two new exported types come with it, `K8sAdapterConfig` and
+  `ComposeAdapterConfig`, naming the shapes those schemas validate.
+
+  **Narrowing, so worth checking if you use it:** `z.ZodType<T>` does not carry
+  `.shape` or `.extend()`. Code calling either on those two exported constants
+  will no longer compile. Nothing in this repository did.
+
 ## [0.7.0] - 2026-09-06
 
 ### Fixed
