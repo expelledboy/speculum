@@ -307,7 +307,7 @@ See [D-024](docs/decisions.md#d-024-framework-lifecycle-telemetry-via-an-opt-in-
 
 **Developer preview.** Semver below 1.0 means minor versions may include breaking changes. The Blueprint / Binding / Adapter shape is stable; specific adapter configs may evolve. The current published version lives in [`package.json`](./package.json) and on [npm](https://www.npmjs.com/package/@expelledboy/cyanotype).
 
-Same 15-test SLA suite green across five adapter modes (in-memory, Docker, Docker Compose attach, K8s deploy, K8s attach against a pre-deployed cluster). 15/15 in each. Plus 178/178 core harness self-tests; 13/13 K8s attach tests (denylist + integration including rolling-restart survivability and override-rescues-non-convention-name). Bun-native development; library code is portable to Node consumers. ~5k LoC src, ~4.4k LoC tests. Runtime deps: `zod`, `yaml`, `dockerode`. The K8s adapter uses `kubectl` as a subprocess (D-019) — no Kubernetes client library is taken as a dependency.
+One reference example runs the same SLA suite across five adapter modes — in-memory, Docker, Docker Compose attach, Kubernetes deploy, and Kubernetes attach against a pre-deployed cluster — alongside the harness's own core suite and the per-adapter substrate suites. Development is Bun-native; the published library is portable to Node consumers. Runtime dependencies are `zod` and `yaml`, with `dockerode` optional and needed only by the Docker adapter. The Kubernetes adapter shells out to `kubectl` ([D-019](docs/decisions.md#d-019-kubectl-shellout-not-kubernetesclient-node-for-the-kubernetes-adapter)) rather than taking a Kubernetes client library as a dependency.
 
 ## Prerequisites
 

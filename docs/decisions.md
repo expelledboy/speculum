@@ -1,6 +1,10 @@
 # Decisions
 
-> Concrete decisions that shape the codebase. Each entry states the context, the decision, and the consequences. Append-only — new decisions get a new entry, never amend an existing one. If a decision is wrong, add a new entry that explicitly retires it; do not edit history.
+> Concrete decisions that shape the codebase. Each entry states the context, the decision, and the consequences.
+>
+> **Each entry describes the decision as it stands now, not how it was arrived at.** Read any entry cold, with no knowledge of what preceded it. Keep measurements, and state the method behind them so they can be rechecked. Leave out how long the work took, what earlier drafts said, and which review caught what — `git log` and `CHANGELOG.md` hold that, and a reader who wants the history knows where to look.
+>
+> **Superseding a decision takes a new entry** that names what it retires and why, because that is a change to the codebase's design and the old reasoning stays worth reading. **Correcting a decision does not** — a wrong figure, a broken reference or an undefined term is fixed in place, leaving no erratum behind.
 
 ## Index
 
@@ -392,7 +396,7 @@ A Cyanotype test holds a reference to `Started.ports[name]` and connects to `127
 `stop()` and `teardown()` set `state.stopped = true` and kill the current subprocess (via the `killForwards` path that already handles deploy-mode tracking).
 
 **Consequences:**
-- `kubectl rollout restart` against an attached Deployment causes a brief blip; the local port stays valid and the next request succeeds. Integration-tested in `tests/core/kubernetes-attach.test.ts > survives rolling restart via reconnection layer`.
+- `kubectl rollout restart` against an attached Deployment causes a brief blip; the local port stays valid and the next request succeeds. Integration-tested in `tests/substrate/kubernetes-attach.test.ts > survives rolling restart via reconnection layer`.
 - The host-side port is allocated by the OS and immediately released before kubectl claims it. The window between `close()` and kubectl's bind is small but non-zero — if another process steals the port in that window, the initial port-forward fails with `bind: address already in use`. Not observed in practice; if it surfaces, the next-step mitigation is to retry the initial spawn with a fresh local port.
 - Re-resolution polls EndpointSlices, not Pods, so attach mode tolerates ReplicaSet rolls correctly: the EndpointSlice represents "the Pods that are currently ready endpoints of this Service."
 - The reconnection layer never mutates the cluster — it only spawns `kubectl port-forward` (allowed in attach mode by the D-018 chokepoint) and reads via `kubectl get svc` / `kubectl get endpointslices` (read verbs only). Safe to use against prod.
@@ -1078,9 +1082,9 @@ The petstore example keeps its Kubernetes coverage in `just pre-release`, run ag
 
 ## D-050. PROPOSED, NOT ADOPTED: the Adapter SPI conflates existence with reachability, and five primitives derive all eight methods
 
-**Status: PROPOSED. No code implements this and none should until it is accepted or rejected.** It sits in an append-only decisions file because the analysis is the durable part: if it is rejected, the reasoning for rejecting it is worth as much as the reasoning for adopting it, and neither should have to be rediscovered.
+**Status: PROPOSED. No code implements this and none should until it is accepted or rejected.** The analysis is recorded whatever the outcome: the reasoning for rejecting it is worth as much as the reasoning for adopting it, and neither should have to be rediscovered.
 
-**Context:** `CONVENTIONS.md` states a whole-project budget of roughly 2500 lines of source, and the codebase measures 4765 lines of code. Before rewriting the rule, the question worth asking was whether the overrun is essential.
+**Context:** `CONVENTIONS.md` then set a single whole-project budget of roughly 2500 lines of source, against a codebase measuring 4765 lines of code. Before rewriting that rule — it now budgets per layer, and the measurements below are why — the question worth asking was whether the overrun is essential.
 
 Measured first, so the rest of this rests on numbers rather than taste:
 
@@ -1149,28 +1153,28 @@ Every current method is a composition of those:
 | Mode branches | **44** | none — an absent capability is untyped, not unbranched |
 | Total | **29** in adapters | **20** in adapters, plus 5 written once in core |
 
-**CORRECTION, made after this entry was first merged.** The two rows above originally read "8 methods x 6 adapters = **48**" and a total of **48**, and both were wrong. There are FOUR adapter factories, not six -- `createDockerAdapter`, `createK8sAdapter`, `createInMemoryAdapter`, `createCompositeAdapter` -- and the sixth and fifth were phantoms produced by counting substrate CONFIGURATIONS (Docker deploy, Docker attach, Kubernetes deploy, Kubernetes attach, in-memory, composite) as though each were its own implementation. The optional eighth method was also multiplied across all of them when it is implemented exactly once: `reconnect` exists only in the Kubernetes adapter and only in deploy mode (`...(mode === "deploy" ? { reconnect } : {})`), Docker and in-memory do not mention it at all, and `composite` omits it deliberately with its reasoning recorded in the source. Counted rather than multiplied: 7 required methods x 4 adapters = 28, plus that one optional implementation = **29**.
-
-The corrected figures are kept in the table above rather than left wrong with an erratum further down, because a table of measurements that a reader must scroll past a correction to distrust is worse than no table. This paragraph records what the numbers were and why they changed. Nothing else in the entry moved: the axes, the five primitives, the derivation table and the 44 branch sites were measured rather than multiplied and are unaffected. `kubectl.ts` remains a helper rather than an adapter. `composite` routes rather than driving a substrate, but still has to implement the primitives to route them, which is why it is counted in the 20.
+The 29 is counted rather than multiplied: 7 required methods across 4 adapter factories — `createDockerAdapter`, `createK8sAdapter`, `createInMemoryAdapter`, `createCompositeAdapter` — plus `reconnect`, which is optional and implemented once, only in the Kubernetes adapter and only in deploy mode. `kubectl.ts` is a helper rather than an adapter and is not counted. `composite` routes rather than driving a substrate, but still has to implement the primitives in order to route them, which is why it sits inside the 20.
 
 **How the measurements above were produced**, since a number with no method behind it cannot be checked: cognitive complexity and nesting depth come from `eslint-plugin-sonarjs` via a wrapper, run over `src/`; line counts exclude blank and comment lines; the branch-site count is a grep for `mode === "attach"`, `mode === "deploy"` and `containerId.startsWith("attach:")` across the two adapters. "Mode" here means the `deploy` / `attach` distinction those branches test: a DEPLOY-mode adapter creates and destroys the workload, an ATTACH-mode adapter binds to one that something else created and must never destroy it.
 
 **What argues against adopting it:**
 
-- **The measurement found no structural problem.** Nothing is deeply nested or tangled. This is an argument from structure, not from pain, and those are different claims. The honest statement is that the SPI carries a conflation costing nine adapter-side implementations (29 today against 20) plus a derived layer currently written per adapter instead of once — not that the code is bad. An earlier version of this sentence claimed "roughly 28 units of duplicated surface", which was the difference between two wrong totals and meant nothing.
+- **The measurement found no structural problem.** Nothing is deeply nested or tangled. This is an argument from structure, not from pain, and those are different claims. The honest statement is that the SPI carries a conflation costing nine adapter-side implementations (29 today against 20) plus a derived layer currently written per adapter instead of once — not that the code is bad.
 - **It is a rewrite of the adapter layer**, roughly 2000 lines, replacing code that is working, tested and shipped, including D-046 and D-047 which were expensive to get right.
 - **No evidence supports it reducing defects.** The largest study of refactoring in the wild found refactoring commits slightly raise the odds of inducing a later fix. Any case for this rests on the surface being smaller and the capability being typed, not on reliability.
 - **Bulk deletion must survive it.** Kubernetes teardown is a single `kubectl delete -l session` call; a naive `find` then map-`destroy` would be N calls. `destroy` therefore takes a SELECTOR, not an id — Docker folds internally, Kubernetes does not. The primitive is shaped for both, but only because it was checked.
 
-**If adopted, the first increment is `find(selector)` alone.** It is additive — nothing existing breaks — and it lets `exists` and `teardown` become derived functions in core, removing one implementation of each from every adapter. That slice tests the whole thesis at a fraction of the cost: if the derived `teardown` cannot express what the four hand-written ones do, the decomposition is wrong and the rest should not be built.
+**A first increment of `find(selector)` alone would be additive** — nothing existing breaks — and would let `exists` and `teardown` become derived functions in core. It is also the cheapest available test of the whole thesis: if a derived `teardown` cannot express what the four hand-written ones do, the decomposition is wrong and the rest should not be built.
+
+**D-051 ran that test and it failed.** There is no cheap first increment; read D-051 before acting on this paragraph.
 
 ---
 
 ## D-051. The cheap first increment D-050 proposed does not exist: a derived teardown needs three primitives, not one
 
-**This retires the closing recommendation of D-050** — "if adopted, the first increment is `find(selector)` alone" — which was wrong. The rest of D-050 stands: the two axes, the five primitives, and the derivation table are unaffected by this entry. What fails is the claim that there is a cheap, additive way in.
+**This retires D-050's proposed first increment** — adding `find(selector)` alone as a cheap, additive way into the kernel. The rest of D-050 stands: the two axes, the five primitives and the derivation table are unaffected. What fails is only the claim that there is an inexpensive way in.
 
-**Context.** D-050 named its own falsification test: *"if a derived `teardown` cannot express what the four hand-written ones do, the decomposition is wrong and the rest should not be built."* Before writing any code, that test was run by reading the four implementations. It cost about twenty minutes and returned a partial fail.
+**Context.** D-050 named its own falsification test: *"if a derived `teardown` cannot express what the four hand-written ones do, the decomposition is wrong and the rest should not be built."* Run against the four implementations, it returns a partial fail.
 
 **Finding 1 — a derived `teardown` needs three primitives, not one.** Both substantial implementations do process-local release that a query cannot express:
 
@@ -1181,14 +1185,14 @@ That work is `detach` in D-050's vocabulary. So `teardown` derives from `find` A
 
 **Finding 2 — a derived `exists` loses behaviour that is load-bearing.** `exists` in the Docker adapter returns false for a chaos-PAUSED attach binding, and false for a container that is present but not running. (CHAOS here is the framework's deliberate fault injection: a test asks for a running component to be stopped, so that the system under test can be observed coping with it. `chaosStop` is the call that does the stopping.) The first is process-local state, the second is status; `find({id})` being non-empty carries neither. This is not cosmetic: `chaosStop` is VERIFIED by polling `exists`, so a naive derivation would silently break chaos verification rather than fail to compile.
 
-**Finding 3 — the saving was overstated.** D-050 implied one hand-written implementation per adapter. Measured, there are two substantial ones and two that are not substrate operations at all:
+**Finding 3 — only two of the four implementations are substrate operations.** A derived `teardown` or `exists` would therefore replace two real implementations, not four:
 
 | | `docker` | `kubernetes` | `memory` | `composite` |
 |---|---|---|---|---|
 | `teardown` | 34 lines | 33 lines, cognitive 28 | a noop | fans out to sub-adapters — stays either way |
 | `exists` | 29 lines | 16 lines | one line | routes on the id prefix — stays either way |
 
-**Finding 4, and this one is new information rather than a correction.** Any `Ref` type the kernel introduces must survive a JSON round-trip between two operating-system processes. `ComponentSnapshot.containerId` is a `string` written into a `schemaVersion: 1` metadata file by the process that deploys and read back by the process that attaches. `src/adapters/composite.ts` already documents this as the reason its routing travels INSIDE the container id (`<routeKey>::<id>`) instead of in a lookup map: the attaching process has no map. So a richer `Ref` is a metadata schema version bump carrying a cross-version attach migration — a cost D-050 did not name, and the one least visible to a single-process test.
+**Finding 4 — `Ref` must cross a process boundary.** Any `Ref` type the kernel introduces must survive a JSON round-trip between two operating-system processes. `ComponentSnapshot.containerId` is a `string` written into a `schemaVersion: 1` metadata file by the process that deploys and read back by the process that attaches. `src/adapters/composite.ts` already documents this as the reason its routing travels INSIDE the container id (`<routeKey>::<id>`) instead of in a lookup map: the attaching process has no map. So a richer `Ref` is a metadata schema version bump carrying a cross-version attach migration — a cost D-050 did not name, and the one least visible to a single-process test.
 
 **Decision.** Do not add `find(selector)` on its own. It buys nothing until `detach` and `destroy` land beside it, and in the meantime it adds an eighth method to an SPI whose stated problem is having too many. **There is no cheap entry point: at the adapter layer this kernel is all-or-nothing.**
 
@@ -1207,4 +1211,3 @@ That work is `detach` in D-050's vocabulary. So `teardown` derives from `find` A
 
 **Consequences.** D-050 remains PROPOSED and unadopted; nothing in this entry argues it is wrong, only that it cannot be entered cheaply. The measured case for it is a smaller surface and a capability expressed in the type system — not reliability, for which no evidence exists either way. Anyone picking it up should treat the metadata migration as the highest-risk item, because it spans two processes and no single-process test will catch a mistake in it.
 
-**Why this is recorded at all.** The alternative was to discover findings 1 and 2 partway through building the increment, having already changed the SPI. Twenty minutes of reading replaced that, and the reading is only worth doing once.
