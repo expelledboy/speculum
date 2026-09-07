@@ -58,7 +58,7 @@ just pre-release               # the release bar; checks everything, tags nothin
 - **`any`:** only in variance-widener positions — places where a specific generic (say `Binding<PetstoreBlueprint>`) must be assignable to a container that holds bindings of *any* Blueprint, and TypeScript's variance rules reject the narrower type. Use the existing `biome-ignore lint/suspicious/noExplicitAny` line with a one-line reason.
 - **Errors:** tagged objects, not classes. `throw { kind: "probe_timeout", lastError, elapsedMs }` — never `throw new Error(...)` except for "this should be impossible" cases.
 - **Tests:** `expect(...)` only. No `sleep(N)`-style waits — use `waitFor(predicate, opts)` from `tests/petstore-example/test-helpers.ts`.
-- **ADRs:** append-only. Never edit an existing entry in `docs/decisions.md`. If a decision is wrong, write a new ADR that retires it. Note that ADRs written before the adapter tests moved out of `tests/core/` cite `tests/core/<name>.test.ts` paths for files that now live in `tests/substrate/` — the paths are historical, the decisions stand.
+- **ADRs:** each entry in `docs/decisions.md` describes the decision as it stands, readable cold. SUPERSEDING one takes a new entry naming what it retires and why; CORRECTING one — a wrong figure, a broken path, an undefined term — is done in place, leaving no erratum. Keep out how the work went: `git log` and `CHANGELOG.md` hold that.
 
 ## Canonical pattern
 

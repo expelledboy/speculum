@@ -201,13 +201,13 @@ The ADR process:
    **Decision:** What we're doing.
    **Consequences:** What this enables, breaks, or forecloses.
    ```
-3. The decisions file is **append-only**. Never edit an existing ADR. If a decision is wrong, add a new ADR that explicitly retires the old one — don't rewrite history.
+3. An ADR describes the decision **as it stands**, and must read cold — no assumed knowledge of what preceded it. Changing a decision takes a **new** ADR that names what it retires and why. Fixing a wrong figure, a broken path or an undefined term is done **in place**, with no erratum left behind. Keep the story of how the work went out of it; `git log` and `CHANGELOG.md` are where that lives.
 
 ### What to do when stuck
 
 - **Spec ambiguous?** Stop and ask. Don't pick between two reasonable interpretations silently — that's how the project drifts.
 - **Test would need a non-trivial fake?** Stop and ask. It's a design smell — the abstraction may need to move.
-- **A module heading past 200 LoC?** Stop and ask. Either the module is eating a neighbour's job or the design is wrong.
+- **A module heading past 400 LoC?** Stop and ask. Most files are one concept and fit in ~200; past 400 either the module is eating a neighbour's job or the design is wrong. `CONVENTIONS.md` has the per-layer budgets and names the two files currently over it.
 
 ## PR shape
 
@@ -299,7 +299,7 @@ tests/
 
 docs/
   axioms.md             The seven forces — contract-derived constraints
-  decisions.md          Append-only ADRs
+  decisions.md          Architecture decision records
   design.md             Architecture map, concept relationships, type flows
   attach-mode.md        Walkthrough for attach mode against K8s clusters and Docker Compose stacks
   k8s-rbac.md           RBAC requirements + cluster setup for the K8s adapter
