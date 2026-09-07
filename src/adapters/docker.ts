@@ -68,7 +68,20 @@ declare module "../adapter.js" {
   }
 }
 
-export const ComposeAdapterConfigSchema = z.object({
+export type ComposeAdapterConfig = {
+  readonly compose?: {
+    readonly attach?: {
+      readonly project?: string | undefined;
+      readonly service?: string | undefined;
+      readonly containerNumber?: number | undefined;
+      readonly port?: number | undefined;
+      readonly allowChaos?: boolean | undefined;
+      readonly onImageDrift?: "warn" | "fail" | "ignore" | undefined;
+    } | undefined;
+  } | undefined;
+};
+
+export const ComposeAdapterConfigSchema: z.ZodType<ComposeAdapterConfig> = z.object({
   compose: z.object({
     attach: z.object({
       project: z.string().optional(),

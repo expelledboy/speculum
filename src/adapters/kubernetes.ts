@@ -31,7 +31,19 @@ declare module "../adapter.js" {
   }
 }
 
-export const K8sAdapterConfigSchema = z.object({
+export type K8sAdapterConfig = {
+  readonly k8s?: {
+    readonly attach?: {
+      readonly namespace?: string | undefined;
+      readonly service?: string | undefined;
+      readonly port?: number | undefined;
+      readonly allowChaos?: boolean | undefined;
+      readonly deployment?: string | undefined;
+    } | undefined;
+  } | undefined;
+};
+
+export const K8sAdapterConfigSchema: z.ZodType<K8sAdapterConfig> = z.object({
   k8s: z.object({
     attach: z.object({
       namespace: z.string().optional(),
