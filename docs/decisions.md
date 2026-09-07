@@ -53,6 +53,7 @@
 - [D-047 — Attach resolves a COMPONENT, not a container id: `reconnect` reconciles by label](#d-047-attach-resolves-a-component-not-a-container-id--reconnect-reconciles-by-label)
 - [D-048 — The Docker adapter asks for `host.docker.internal`; it no longer assumes the runtime defines it](#d-048-the-docker-adapter-asks-for-hostdockerinternal-it-no-longer-assumes-the-runtime-defines-it)
 - [D-049 — CI runs the Kubernetes ADAPTER suites, not the example: one port-forward per component is not yet survivable](#d-049-ci-runs-the-kubernetes-adapter-suites-not-the-example--one-port-forward-per-component-is-not-yet-survivable)
+- [D-050 — PROPOSED: the Adapter SPI conflates existence with reachability; five primitives derive all eight methods](#d-050-proposed-not-adopted-the-adapter-spi-conflates-existence-with-reachability-and-five-primitives-derive-all-eight-methods)
 
 ---
 
@@ -1071,3 +1072,83 @@ The petstore example keeps its Kubernetes coverage in `just pre-release`, run ag
 - CI's Kubernetes coverage is narrower but honest. Before this work those suites ran in CI and asserted nothing at all, so the change is from 22 tests reporting passes without a cluster to 22 tests demanding one.
 - **What is claimed here is bounded by what was observed.** Forwards establish and then stop carrying traffic. The forward itself was never instrumented, so whether the subprocess dies, the stream resets, or the API server times out the connection is unestablished. Anyone picking up the fix should start by measuring that, not by trusting a mechanism this record does not have.
 - Two suites that a contributor may reasonably expect to be reliable are not, on the default cluster. `CONTRIBUTING.md` names them and says which cluster to point at instead.
+
+---
+
+## D-050. PROPOSED, NOT ADOPTED: the Adapter SPI conflates existence with reachability, and five primitives derive all eight methods
+
+**Status: PROPOSED. No code implements this and none should until it is accepted or rejected.** It sits in an append-only decisions file because the analysis is the durable part: if it is rejected, the reasoning for rejecting it is worth as much as the reasoning for adopting it, and neither should have to be rediscovered.
+
+**Context:** `CONVENTIONS.md` states a whole-project budget of roughly 2500 lines of source, and the codebase measures 4765 lines of code. Before rewriting the rule, the question worth asking was whether the overrun is essential.
+
+Measured first, so the rest of this rests on numbers rather than taste:
+
+| | |
+|---|---|
+| `src/` code lines (excluding blanks and comments) | 4765 — core 2504, adapters 1958, cli 303 |
+| Functions over the complexity thresholds | 19, maximum nesting 5, maximum cognitive 30 |
+| Functions with a *structural* problem | 0 |
+| Hint prose, by volume | 4% of `src` (12,408 of 289,791 characters) |
+| `createDockerAdapter` | 623 lines, cognitive 0, nesting 0 |
+| `createK8sAdapter` | 631 lines, cognitive 1, nesting 0 |
+| Mode-dependent branch sites in the two adapters | 44 |
+
+Two of those deserve emphasis. **The core is 2504 lines against a 2500 budget** — the rule was never broken by the thing it was written about; the overrun is entirely the pluggable substrate layer that D-018, D-025, D-030, D-038 and D-046 each added deliberately. And **the adapters are not complex, they are closures**: each is one 620-line function defining every SPI method over shared mutable state, which is why the file is enormous and the cognitive score is nearly zero.
+
+So there is no redundancy to delete. There is, however, a conflation in the SPI.
+
+**The analysis.** Sorting the eight methods by what they actually touch produces two orthogonal axes:
+
+- **Lifetime.** A *substrate object* — the container or Pod — is durable: it survives this process and is shared across workers. *Process-local access* — a port-forward, a log stream, a cached client handle — dies with the process that opened it.
+- **Direction.** Acquire, or release.
+
+That 2×2, plus one query, is five primitives:
+
+| | acquire | release |
+|---|---|---|
+| substrate object | `create(spec) -> Ref` | `destroy(selector)` |
+| process-local access | `attach(Ref, ports) -> Access` | `detach(Access)` |
+
+plus `find(selector) -> Ref[]`.
+
+Every current method is a composition of those:
+
+| Today | Derives as |
+|---|---|
+| `start`, deploy mode | `create` then `attach` |
+| `start`, attach mode | `find` then `attach` |
+| `stop`, deploy mode | `detach` then `destroy({id})` |
+| `stop`, attach mode | `detach` |
+| `exists(id)` | `find({id})` is non-empty |
+| `teardown()` | `detach` over the known set, then `destroy({session})` |
+| `reconnect(spec)` | `find(labels)` then `attach` |
+| `logs` | the stream half of `attach`; released by `detach` |
+| `connect` / `disconnect` | not container operations at all — client construction and disposal |
+
+**Three consequences follow, and they are the reason this is worth recording even if it is never built.**
+
+1. **`reconnect` is not an eighth method.** It is `find` then `attach` — the same composition `start` already performs in attach mode. D-046 introduced it as "the only optional method" because `Started.ports` is not durable on Kubernetes. That non-durability *is* the lifetime axis: the SPI had no way to say "the workload exists" separately from "I can reach it", so a second method was added to mean the difference. Split the axis and the special case disappears.
+
+2. **D-047 restates the same gap.** "Attach resolves a COMPONENT, not a container id" is the observation that resolution should take a selector rather than an id — which is already `find`'s signature. Two decision records, both expensive to arrive at, are consequences of one missing distinction.
+
+3. **Attach mode is a capability restriction, not a mode.** Attach is the adapter without `create` and `destroy`. This is what the 44 branch sites are for: each asks "am I in attach mode", which is really "do I have this capability" — a question a capability-typed adapter answers once, at construction, in its type. The clearest evidence is `containerId.startsWith("attach:")`, a discriminated union carried in a string prefix because nothing in the type could carry it.
+
+**The space this determines:**
+
+| | today | under the kernel |
+|---|---|---|
+| Method implementations | 8 methods x 6 adapters = **48** | 5 primitives x 3 real substrates = **15** |
+| Derived layer | re-implemented per adapter | **5** functions, written once in core |
+| Mode branches | **44** | none — an absent capability is untyped, not unbranched |
+| Total units | **48** | **20** |
+
+`composite` routes rather than implements, and `kubectl.ts` is a helper; the three substrates needing primitives are Docker, Kubernetes and in-memory.
+
+**What argues against adopting it:**
+
+- **The measurement found no structural problem.** Nothing is deeply nested or tangled. This is an argument from structure, not from pain, and those are different claims. The honest statement is that the SPI carries a conflation costing roughly 28 units of duplicated surface — not that the code is bad.
+- **It is a rewrite of the adapter layer**, roughly 2000 lines, replacing code that is working, tested and shipped, including D-046 and D-047 which were expensive to get right.
+- **No evidence supports it reducing defects.** The largest study of refactoring in the wild found refactoring commits slightly raise the odds of inducing a later fix. Any case for this rests on the surface being smaller and the capability being typed, not on reliability.
+- **Bulk deletion must survive it.** Kubernetes teardown is a single `kubectl delete -l session` call; a naive `find` then map-`destroy` would be N calls. `destroy` therefore takes a SELECTOR, not an id — Docker folds internally, Kubernetes does not. The primitive is shaped for both, but only because it was checked.
+
+**If adopted, the first increment is `find(selector)` alone.** It is additive — nothing existing breaks — and it lets `exists` and `teardown` become derived functions in core, removing one implementation of each from every adapter. That slice tests the whole thesis at a fraction of the cost: if the derived `teardown` cannot express what the four hand-written ones do, the decomposition is wrong and the rest should not be built.
