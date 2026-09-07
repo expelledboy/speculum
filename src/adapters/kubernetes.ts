@@ -11,7 +11,7 @@
  */
 
 import net from "node:net";
-import type { Subprocess } from "bun";
+import type { SpawnedProcess } from "./kubectl.js";
 import { z } from "zod";
 import type { Adapter, StartSpec, Started, ReconnectSpec, Reconnected } from "../adapter.js";
 import { createKubectl, type KubectlClient, type KubectlMode } from "./kubectl.js";
@@ -70,7 +70,7 @@ type Tracked = {
   readonly podName: string;
   readonly namespace: string;
   readonly context: string | undefined;
-  readonly forwards: Subprocess[];
+  readonly forwards: SpawnedProcess[];
   readonly serviceName: string | null;
   readonly attach?: AttachState;
 };
@@ -79,7 +79,7 @@ type ReconnectForward = {
   readonly localPort: number;
   readonly containerPort: number;
   currentPod: string;
-  proc: Subprocess | null;
+  proc: SpawnedProcess | null;
   stopped: boolean;
   paused: boolean;
   kill(): void;
@@ -616,7 +616,7 @@ export const createK8sAdapter = (opts: K8sAdapterOptions): Adapter => {
     };
   };
 
-  const startPortForward = (podName: string, containerPort: number, requestedLocal: number | "auto"): Promise<{ proc: Subprocess; localPort: number }> => {
+  const startPortForward = (podName: string, containerPort: number, requestedLocal: number | "auto"): Promise<{ proc: SpawnedProcess; localPort: number }> => {
     const localSpec = requestedLocal === "auto" ? `:${containerPort}` : `${requestedLocal}:${containerPort}`;
     const handle = k.stream(["port-forward", `pod/${podName}`, localSpec]);
     return new Promise((resolve, reject) => {
@@ -951,7 +951,7 @@ export const createK8sAdapter = (opts: K8sAdapterOptions): Adapter => {
     }
 
     const ports: Record<string, number> = {};
-    const forwards: Subprocess[] = [];
+    const forwards: SpawnedProcess[] = [];
     try {
       for (const [name, _value] of Object.entries(spec.ports)) {
         const containerPort = Number(name);
@@ -1126,7 +1126,7 @@ export const createK8sAdapter = (opts: K8sAdapterOptions): Adapter => {
     }
     const podName = live[0]?.metadata?.name ?? "";
     const ports: Record<string, number> = {};
-    const forwards: Subprocess[] = [];
+    const forwards: SpawnedProcess[] = [];
     try {
       for (const name of spec.ports) {
         const { proc, localPort } = await startPortForward(podName, Number(name), "auto");

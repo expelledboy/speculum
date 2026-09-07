@@ -48,6 +48,11 @@ test-substrate:
 [group('general')]
 test-core: test-unit test-substrate
 
+# Can a consumer compile against the packed library, on zod 3 and zod 4?
+[group('general')]
+consumer-types:
+    bun scripts/check-consumer-types.ts
+
 # Refuse to pass unless this tree is releasable. Checks everything, tags nothing.
 [group('general')]
 pre-release:

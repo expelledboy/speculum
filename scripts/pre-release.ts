@@ -205,6 +205,14 @@ const verification: Check[] = [
     run: () => mustPass(["bun", "pm", "pack", "--dry-run"], "`bun pm pack --dry-run` failed."),
   },
   {
+    // Everything above this line runs inside our own node_modules, where zod
+    // resolves to one copy and @types/bun is always present. A consumer has
+    // neither guarantee, and v0.7.1 shipped two defects that only appear on
+    // the far side of that boundary.
+    name: "consumer types (zod 3 and zod 4)",
+    run: () => mustPass(["bun", "scripts/check-consumer-types.ts"], "A consumer could not compile against the packed library."),
+  },
+  {
     name: "petstore example (memory, docker, docker-attach, k8s, k8s-attach)",
     run: () => {
       // CI runs the first three. The two Kubernetes paths run nowhere else —

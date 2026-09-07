@@ -11,10 +11,12 @@ Cyanotype is a Bun-native blackbox test harness for multi-container service syst
 ## Install
 
 ```sh
-bun add @expelledboy/cyanotype
+bun add @expelledboy/cyanotype zod
 # or
-npm install @expelledboy/cyanotype
+npm install @expelledboy/cyanotype zod
 ```
+
+`zod` is a peer dependency — you write the schemas, so your project owns the copy. The supported range is `^3.23.0 || ^4.0.0`; npm 7+ and Bun install missing peers automatically, and it is listed above because you will be importing it directly anyway.
 
 Bun ≥ 1.3 is required to **run** the test suite (Cyanotype uses `Bun.spawn` and `bun:test`). The library is published as ESM only; consumers can `import` it from Bun, or from Node ≥ 22 (which supports `require()` of ESM modules for CJS callers).
 
@@ -307,7 +309,7 @@ See [D-024](docs/decisions.md#d-024-framework-lifecycle-telemetry-via-an-opt-in-
 
 **Developer preview.** Semver below 1.0 means minor versions may include breaking changes. The Blueprint / Binding / Adapter shape is stable; specific adapter configs may evolve. The current published version lives in [`package.json`](./package.json) and on [npm](https://www.npmjs.com/package/@expelledboy/cyanotype).
 
-One reference example runs the same SLA suite across five adapter modes — in-memory, Docker, Docker Compose attach, Kubernetes deploy, and Kubernetes attach against a pre-deployed cluster — alongside the harness's own core suite and the per-adapter substrate suites. Development is Bun-native; the published library is portable to Node consumers. Runtime dependencies are `zod` and `yaml`, with `dockerode` optional and needed only by the Docker adapter. The Kubernetes adapter shells out to `kubectl` ([D-019](docs/decisions.md#d-019-kubectl-shellout-not-kubernetesclient-node-for-the-kubernetes-adapter)) rather than taking a Kubernetes client library as a dependency.
+One reference example runs the same SLA suite across five adapter modes — in-memory, Docker, Docker Compose attach, Kubernetes deploy, and Kubernetes attach against a pre-deployed cluster — alongside the harness's own core suite and the per-adapter substrate suites. Development is Bun-native; the published library is portable to Node consumers. `zod` is a peer dependency, ranged `^3.23.0 || ^4.0.0` so your project supplies the copy and its schemas are the ones our types accept; npm 7+ and Bun install it for you. `yaml` is a normal dependency, and `dockerode` is optional, needed only by the Docker adapter. The Kubernetes adapter shells out to `kubectl` ([D-019](docs/decisions.md#d-019-kubectl-shellout-not-kubernetesclient-node-for-the-kubernetes-adapter)) rather than taking a Kubernetes client library as a dependency.
 
 ## Prerequisites
 

@@ -45,6 +45,12 @@ jobs:
       - run: bun run build
       - run: bun test tests/core/
       - run: bun pm pack --dry-run
+      # Everything above runs inside our own node_modules, where zod resolves
+      # to one copy and @types/bun is always present. A consumer's project has
+      # neither guarantee. Two defects reached v0.7.1 through that blind spot,
+      # so this compiles a real consumer against the packed tarball on each
+      # zod major the peerDependencies range promises.
+      - run: bun scripts/check-consumer-types.ts
 
   docker:
     name: docker substrate
