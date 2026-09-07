@@ -54,6 +54,7 @@
 - [D-048 — The Docker adapter asks for `host.docker.internal`; it no longer assumes the runtime defines it](#d-048-the-docker-adapter-asks-for-hostdockerinternal-it-no-longer-assumes-the-runtime-defines-it)
 - [D-049 — CI runs the Kubernetes ADAPTER suites, not the example: one port-forward per component is not yet survivable](#d-049-ci-runs-the-kubernetes-adapter-suites-not-the-example--one-port-forward-per-component-is-not-yet-survivable)
 - [D-050 — PROPOSED: the Adapter SPI conflates existence with reachability; five primitives derive all eight methods](#d-050-proposed-not-adopted-the-adapter-spi-conflates-existence-with-reachability-and-five-primitives-derive-all-eight-methods)
+- [D-051 — The cheap first increment D-050 proposed does not exist: a derived teardown needs three primitives, not one](#d-051-the-cheap-first-increment-d-050-proposed-does-not-exist-a-derived-teardown-needs-three-primitives-not-one)
 
 ---
 
@@ -1152,3 +1153,48 @@ Every current method is a composition of those:
 - **Bulk deletion must survive it.** Kubernetes teardown is a single `kubectl delete -l session` call; a naive `find` then map-`destroy` would be N calls. `destroy` therefore takes a SELECTOR, not an id — Docker folds internally, Kubernetes does not. The primitive is shaped for both, but only because it was checked.
 
 **If adopted, the first increment is `find(selector)` alone.** It is additive — nothing existing breaks — and it lets `exists` and `teardown` become derived functions in core, removing one implementation of each from every adapter. That slice tests the whole thesis at a fraction of the cost: if the derived `teardown` cannot express what the four hand-written ones do, the decomposition is wrong and the rest should not be built.
+
+---
+
+## D-051. The cheap first increment D-050 proposed does not exist: a derived teardown needs three primitives, not one
+
+**This retires the closing recommendation of D-050** — "if adopted, the first increment is `find(selector)` alone" — which was wrong. The rest of D-050 stands: the two axes, the five primitives, and the derivation table are unaffected by this entry. What fails is the claim that there is a cheap, additive way in.
+
+**Context.** D-050 named its own falsification test: *"if a derived `teardown` cannot express what the four hand-written ones do, the decomposition is wrong and the rest should not be built."* Before writing any code, that test was run by reading the four implementations. It cost about twenty minutes and returned a partial fail.
+
+**Finding 1 — a derived `teardown` needs three primitives, not one.** Both substantial implementations do process-local release that a query cannot express:
+
+- `src/adapters/docker.ts` clears `attachBindings`, then folds `stop` over the known set.
+- `src/adapters/kubernetes.ts` kills reconnect child processes, drains `pausedAttaches`, and runs `killForwards` over `globalTracked`.
+
+That work is `detach` in D-050's vocabulary. So `teardown` derives from `find` AND `detach` AND `destroy(selector)` — three of the five primitives, which is most of the kernel rather than a slice of it.
+
+**Finding 2 — a derived `exists` loses behaviour that is load-bearing.** `exists` in the Docker adapter returns false for a chaos-PAUSED attach binding, and false for a container that is present but not running. The first is process-local state, the second is status; `find({id})` being non-empty carries neither. This is not cosmetic: `chaosStop` is VERIFIED by polling `exists`, so a naive derivation would silently break chaos verification rather than fail to compile.
+
+**Finding 3 — the saving was overstated.** D-050 implied one hand-written implementation per adapter. Measured, there are two substantial ones and two that are not substrate operations at all:
+
+| | `docker` | `kubernetes` | `memory` | `composite` |
+|---|---|---|---|---|
+| `teardown` | 34 lines | 33 lines, cognitive 28 | a noop | fans out to sub-adapters — stays either way |
+| `exists` | 29 lines | 15 lines | one line | routes on the id prefix — stays either way |
+
+**Finding 4, and this one is new information rather than a correction.** Any `Ref` type the kernel introduces must survive a JSON round-trip between two operating-system processes. `ComponentSnapshot.containerId` is a `string` written into a `schemaVersion: 1` metadata file by the process that deploys and read back by the process that attaches. `src/adapters/composite.ts` already documents this as the reason its routing travels INSIDE the container id (`<routeKey>::<id>`) instead of in a lookup map: the attaching process has no map. So a richer `Ref` is a metadata schema version bump carrying a cross-version attach migration — a cost D-050 did not name, and the one least visible to a single-process test.
+
+**Decision.** Do not add `find(selector)` on its own. It buys nothing until `detach` and `destroy` land beside it, and in the meantime it adds an eighth method to an SPI whose stated problem is having too many. **There is no cheap entry point: at the adapter layer this kernel is all-or-nothing.**
+
+**What adopting it would actually take**, sized from measurements so the decision is a scheduling one rather than a leap:
+
+| Work | Size |
+|---|---|
+| Rewrite `docker.ts` and `kubernetes.ts` onto five primitives | 1666 code lines |
+| Adapt `memory` and `composite` | ~200 code lines |
+| Derived layer in core | 5 functions, written once |
+| Update call sites | 6 — `src/shared.ts` x4, `src/orchestrator.ts` x2 |
+| Remove or retype the mode branches | 44 sites |
+| Metadata `schemaVersion` 1 to 2, with migration | affects cross-version attach |
+| Preserve D-034, D-046 and D-047 semantics | the genuinely hard part |
+| Re-verify | 205 core tests plus the substrate suites on three substrates |
+
+**Consequences.** D-050 remains PROPOSED and unadopted; nothing in this entry argues it is wrong, only that it cannot be entered cheaply. The measured case for it is a smaller surface and a capability expressed in the type system — not reliability, for which no evidence exists either way. Anyone picking it up should treat the metadata migration as the highest-risk item, because it spans two processes and no single-process test will catch a mistake in it.
+
+**Why this is recorded at all.** The alternative was to discover findings 1 and 2 partway through building the increment, having already changed the SPI. Twenty minutes of reading replaced that, and the reading is only worth doing once.
